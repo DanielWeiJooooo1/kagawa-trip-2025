@@ -2,95 +2,156 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>瀨戶內海冬季任務指揮中心</title>
-    <!-- 引入 React 和 ReactDOM -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>瀨戶內海冬季任務指揮中心 (雲端同步版)</title>
+    <!-- React & Tailwind -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- 引入 Babel 用於解析 JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Firebase SDK (模組化版本相容腳本) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
     <style>
-        /* 自定義捲軸隱藏 */
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        /* 簡單的淡入動畫 */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-up {
-            animation: fade-in-up 0.3s ease-out forwards;
-        }
+        .animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
-        
-        // 由於 Lucide React 在 CDN 環境下無法直接解構，我們需要一個 Helper 來生成 SVG
-        // 這裡我們簡單定義圖標組件，對應 lucide-react 的圖標
-        // 注意：為了簡化，這裡使用 Lucide 的全域 createIcons 方法在 render 後替換 i 標籤，
-        // 或者更簡單地，我們直接用 SVG 字符串或簡單的 icon mapping。
-        // 在這個單一文件版本中，為了確保 icon 顯示，我們使用 lucide.icons 的 SVG 內容
-        
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================
+        //  請在這裡貼上您的 Firebase Config
+        // ==========================================
+        const firebaseConfig = {
+            // 請取代下方的範例內容
+            apiKey: "AIzaSyAv5IijFahAASxqHpoIrrFVcroLV9WExD4",
+            authDomain: "takamatsu-trip-2025.firebaseapp.com",
+            projectId: "takamatsu-trip-2025",
+            storageBucket: "takamatsu-trip-2025.firebasestorage.app",
+            messagingSenderId: "181003622268",
+            appId: "1:181003622268:web:51e386ce854cd1ddbfb6f9"
+        };
+        // ==========================================
+
+        // 初始化 Firebase (如果有設定的話)
+        let db = null;
+        if (firebaseConfig.projectId) {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                console.log("Firebase initialized successfully");
+            } catch (e) {
+                console.error("Firebase init failed:", e);
+            }
+        }
+
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconName = name.charAt(0).toLowerCase() + name.slice(1);
-            // Lucide 全域變數名為 lucide
-            // 這裡我們用一個簡單的替換方案，讓圖標能在瀏覽器渲染
-            // 實際在瀏覽器端使用 lucide-react 比較麻煩，我們改用 lucide.createIcons
             return <i data-lucide={iconName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
         };
 
-        // 為了讓 React 重新渲染時圖標也能更新
         const useLucide = () => {
             useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
+                if (window.lucide) window.lucide.createIcons();
             });
         };
 
         const TripPlanner = () => {
             const [activeTab, setActiveTab] = useState(0);
-            const [notes, setNotes] = useState({
-                0: '', 1: '', 2: '', 3: '', 4: ''
-            });
+            
+            // 雲端同步的資料狀態
+            const [notes, setNotes] = useState({ 0: '', 1: '', 2: '', 3: '', 4: '' });
             const [checkedItems, setCheckedItems] = useState({});
+            const [syncStatus, setSyncStatus] = useState(db ? '連線中...' : '本機模式');
+            
             const [showMap, setShowMap] = useState(false);
             const [currentMapUrl, setCurrentMapUrl] = useState('');
             const [currentMapTitle, setCurrentMapTitle] = useState('');
 
-            useLucide(); // 每次渲染後更新圖標
+            useLucide();
 
+            // 1. 初始化讀取資料 (從 Firebase 或 LocalStorage)
+            useEffect(() => {
+                if (db) {
+                    // 監聽 Firebase 變更 (Real-time)
+                    const unsubscribe = db.collection('trips').doc('kagawa2025').onSnapshot((doc) => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            if (data.notes) setNotes(data.notes);
+                            if (data.checkedItems) setCheckedItems(data.checkedItems);
+                            setSyncStatus('已同步');
+                        } else {
+                            // 如果雲端沒資料，建立預設值
+                            db.collection('trips').doc('kagawa2025').set({
+                                notes: { 0: '', 1: '', 2: '', 3: '', 4: '' },
+                                checkedItems: {}
+                            });
+                        }
+                    }, (error) => {
+                        console.error("Sync error:", error);
+                        setSyncStatus('同步失敗');
+                    });
+                    return () => unsubscribe();
+                } else {
+                    // Fallback: 讀取 LocalStorage
+                    const savedNotes = localStorage.getItem('trip_notes');
+                    const savedChecks = localStorage.getItem('trip_checks');
+                    if (savedNotes) setNotes(JSON.parse(savedNotes));
+                    if (savedChecks) setCheckedItems(JSON.parse(savedChecks));
+                }
+            }, []);
+
+            // 2. 處理資料更新並寫入
             const handleCheck = (id) => {
-                setCheckedItems(prev => ({
-                    ...prev,
-                    [id]: !prev[id]
-                }));
+                const newChecks = { ...checkedItems, [id]: !checkedItems[id] };
+                setCheckedItems(newChecks);
+                saveData(notes, newChecks);
             };
 
             const handleNoteChange = (dayIndex, text) => {
-                setNotes(prev => ({
-                    ...prev,
-                    [dayIndex]: text
-                }));
+                const newNotes = { ...notes, [dayIndex]: text };
+                setNotes(newNotes);
+                
+                // 防抖動 (Debounce): 避免打一個字就傳一次雲端
+                if (window.saveTimeout) clearTimeout(window.saveTimeout);
+                window.saveTimeout = setTimeout(() => {
+                    saveData(newNotes, checkedItems);
+                }, 1000);
             };
 
-            const getDirLink = (origin, dest) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=transit`;
-            const getPlaceLink = (query) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-            const getEmbedUrl = (query) => `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
+            const saveData = (newNotes, newChecks) => {
+                if (db) {
+                    setSyncStatus('儲存中...');
+                    db.collection('trips').doc('kagawa2025').set({
+                        notes: newNotes,
+                        checkedItems: newChecks
+                    }, { merge: true }).then(() => {
+                        setSyncStatus('已同步');
+                    }).catch(err => {
+                        console.error(err);
+                        setSyncStatus('儲存失敗');
+                    });
+                } else {
+                    // 存到 LocalStorage
+                    localStorage.setItem('trip_notes', JSON.stringify(newNotes));
+                    localStorage.setItem('trip_checks', JSON.stringify(newChecks));
+                }
+            };
 
+            // Map Helpers
+            const getEmbedUrl = (query) => `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
             const openMap = (title, query) => {
                 setCurrentMapTitle(title);
                 setCurrentMapUrl(getEmbedUrl(query));
@@ -99,11 +160,7 @@
 
             const kusamaColors = {
                 yellow: 'bg-yellow-400',
-                yellowLight: 'bg-yellow-50',
                 red: 'bg-red-500',
-                redLight: 'bg-red-50',
-                black: 'text-gray-900',
-                white: 'bg-white',
                 dotPattern: "radial-gradient(#00000020 2px, transparent 2px)",
             };
 
@@ -224,7 +281,7 @@
             ];
 
             return (
-                <div className="max-w-4xl mx-auto p-6 min-h-screen font-sans relative" 
+                <div className="max-w-4xl mx-auto p-4 md:p-6 min-h-screen font-sans relative pb-20" 
                      style={{
                        backgroundColor: '#fbbf24',
                        backgroundImage: kusamaColors.dotPattern,
@@ -232,36 +289,36 @@
                      }}>
                   
                   {/* Header Card */}
-                  <div className="bg-white rounded-3xl shadow-xl p-8 mb-8 border-4 border-black relative overflow-hidden">
+                  <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 mb-6 border-4 border-black relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-red-500 rounded-full -mr-10 -mt-10 opacity-20"></div>
-                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-yellow-400 rounded-full -ml-8 -mb-8 opacity-20"></div>
                     
-                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-3 tracking-tight">
-                      🚢 瀨戶內海冬季任務指揮中心
+                    <h1 className="text-2xl md:text-4xl font-black text-gray-900 mb-2 tracking-tight">
+                      🚢 瀨戶內海冬季任務
                     </h1>
-                    <div className="flex flex-wrap items-center gap-3 text-gray-700 font-bold">
-                      <span className="bg-yellow-300 border-2 border-black px-3 py-1 rounded-full text-sm">2025/12/25 - 12/29</span>
-                      <span className="flex items-center gap-1"><Icon name="mapPin" size={16}/> 高松・小豆島・直島・琴平</span>
-                    </div>
-                    <div className="mt-6 flex flex-wrap gap-4 text-sm font-medium text-gray-600 bg-gray-50 p-4 rounded-xl border-2 border-gray-100">
-                      <div className="flex items-center gap-2"><Icon name="plane" size={18} className="text-blue-500"/> 星宇 JX300 / JX301</div>
-                      <div className="flex items-center gap-2"><Icon name="info" size={18} className="text-red-500"/> 旅客：魏銓德 & 黃子晏</div>
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-sm font-bold text-gray-600">
+                            <span>2025/12/25 - 12/29</span>
+                        </div>
+                        {/* 顯示同步狀態 */}
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${syncStatus === '已同步' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {db ? `☁️ ${syncStatus}` : '💾 本機模式 (無同步)'}
+                        </div>
                     </div>
                   </div>
 
                   {/* Tabs */}
-                  <div className="flex overflow-x-auto gap-3 mb-8 pb-4 scrollbar-hide px-2">
+                  <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-hide px-1">
                     {itinerary.map((item, index) => (
                       <button
                         key={index}
                         onClick={() => setActiveTab(index)}
-                        className={`flex-shrink-0 px-6 py-4 rounded-2xl font-bold transition-all duration-300 border-b-4 ${
+                        className={`flex-shrink-0 px-4 py-3 rounded-2xl font-bold transition-all duration-300 border-b-4 ${
                           activeTab === index 
                             ? 'bg-black text-yellow-400 border-black transform -translate-y-1 shadow-lg' 
-                            : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white text-gray-800 border-gray-300'
                         }`}
                       >
-                        <div className="text-xs uppercase tracking-wider opacity-80 mb-1">{item.date}</div>
+                        <div className="text-xs opacity-70 mb-1">{item.date}</div>
                         <div className="text-lg">{item.day}</div>
                       </button>
                     ))}
@@ -272,62 +329,59 @@
                     
                     {/* Left Column: Itinerary Details */}
                     <div className="md:col-span-2 space-y-6">
-                      <div className={`bg-white rounded-3xl shadow-xl p-8 border-l-8 ${itinerary[activeTab].accentColor}`}>
+                      <div className={`bg-white rounded-3xl shadow-xl p-6 border-l-8 ${itinerary[activeTab].accentColor}`}>
                         <div className="flex justify-between items-start mb-4">
-                          <h2 className={`text-2xl font-black ${itinerary[activeTab].themeColor} mb-2`}>{itinerary[activeTab].theme}</h2>
+                          <h2 className={`text-xl font-black ${itinerary[activeTab].themeColor}`}>{itinerary[activeTab].theme}</h2>
                           {activeTab === 3 && <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">南瓜重點日</div>}
                         </div>
                         
-                        <p className="bg-gray-100 px-4 py-2 rounded-lg text-gray-700 font-bold mb-6 inline-block text-sm">
-                          ✨ 亮點：{itinerary[activeTab].highlight}
+                        <p className="bg-gray-100 px-3 py-2 rounded-lg text-gray-700 font-bold mb-6 text-sm inline-block">
+                          ✨ {itinerary[activeTab].highlight}
                         </p>
                         
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {itinerary[activeTab].details.map((detail, idx) => (
-                            <div key={idx} className="flex items-center gap-4 group bg-white hover:bg-gray-50 p-3 rounded-xl transition-colors border border-transparent hover:border-gray-200">
-                              <div className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-black text-white shadow-md`}>
-                                <Icon name={detail.icon} size={20} />
+                            <div key={idx} className="flex items-center gap-3 group bg-white hover:bg-gray-50 p-2 rounded-xl border border-transparent hover:border-gray-200">
+                              <div className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-black text-white`}>
+                                <Icon name={detail.icon} size={16} />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="font-bold text-gray-900">{detail.time}</div>
+                                <div className="font-bold text-gray-900 text-sm">{detail.time}</div>
                                 <div className="text-gray-600 font-medium text-sm">{detail.text}</div>
                               </div>
                               {detail.mapQuery && (
                                 <button 
                                   onClick={() => openMap(detail.text, detail.mapQuery)}
-                                  className="flex-shrink-0 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                                  title="在地圖視窗中查看"
+                                  className="flex-shrink-0 p-2 text-gray-400 hover:text-red-500"
                                 >
-                                  <Icon name="map" size={20} />
+                                  <Icon name="map" size={18} />
                                 </button>
                               )}
                             </div>
                           ))}
                         </div>
-
-                        <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200">
-                          <div className="flex items-center gap-2 text-sm font-bold text-gray-500 mb-2">
-                            <Icon name="moon" size={16} /> 住宿安排
-                          </div>
-                          <div className="flex items-center justify-between bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                            <div className="font-bold text-indigo-900">{itinerary[activeTab].stay}</div>
-                            {itinerary[activeTab].stayQuery && (
-                              <button 
-                                onClick={() => openMap(itinerary[activeTab].stay, itinerary[activeTab].stayQuery)}
-                                className="text-xs bg-white text-indigo-600 px-3 py-1.5 rounded-full font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-1"
-                              >
-                                位置 <Icon name="map" size={12}/>
-                              </button>
-                            )}
-                          </div>
+                        
+                        {/* Accommodation */}
+                        <div className="mt-6 pt-4 border-t border-dashed border-gray-200">
+                            <div className="flex justify-between items-center bg-indigo-50 p-3 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    <Icon name="moon" size={16} className="text-indigo-500"/>
+                                    <span className="font-bold text-indigo-900 text-sm">{itinerary[activeTab].stay}</span>
+                                </div>
+                                {itinerary[activeTab].stayQuery && (
+                                  <button onClick={() => openMap(itinerary[activeTab].stay, itinerary[activeTab].stayQuery)}>
+                                    <Icon name="map" size={16} className="text-indigo-400"/>
+                                  </button>
+                                )}
+                            </div>
                         </div>
                       </div>
 
                       {/* Strategy Box */}
-                      <div className="bg-black text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-400 rounded-full blur-xl opacity-20"></div>
-                        <h3 className="font-bold text-yellow-400 mb-3 flex items-center gap-2 text-lg">
-                          <Icon name="info" size={20}/> 策略思考
+                      <div className="bg-black text-white rounded-3xl p-5 shadow-xl relative overflow-hidden">
+                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-yellow-400 rounded-full blur-lg opacity-30"></div>
+                        <h3 className="font-bold text-yellow-400 mb-2 flex items-center gap-2 text-sm">
+                          <Icon name="info" size={16}/> 策略思考
                         </h3>
                         <p className="text-gray-300 text-sm leading-relaxed font-medium">
                           {itinerary[activeTab].strategy}
@@ -383,12 +437,10 @@
                   {/* Map Modal */}
                   {showMap && (
                     <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-fade-in-up border-4 border-yellow-400">
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden animate-fade-in-up border-4 border-yellow-400">
                         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                          <h3 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
-                            <div className="bg-red-500 p-1.5 rounded-full text-white">
-                              <Icon name="mapPin" size={16} className="text-white" />
-                            </div>
+                          <h3 className="font-bold text-gray-900 flex items-center gap-2 text-lg truncate pr-4">
+                            <Icon name="mapPin" size={20} className="text-red-500" />
                             {currentMapTitle}
                           </h3>
                           <button 
