@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>瀨戶內海冬季任務指揮中心 V5.0+</title>
+    <title>瀨戶內海冬季任務指揮中心 V5.0+ (Kusama Edition)</title>
     
     <!-- React & Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -18,14 +18,64 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #fbbf24; /* Kusama Yellow */
+            background-image: radial-gradient(#000 15%, transparent 16%), radial-gradient(#000 15%, transparent 16%);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            color: #000;
+        }
+
+        .kusama-card {
+            background-color: white;
+            border: 4px solid black;
+            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+            border-radius: 1.5rem; /* rounded-3xl */
+            transition: all 0.2s ease;
+        }
+        
+        .kusama-card:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 12px 12px 0px 0px rgba(0,0,0,1);
+        }
+
+        .kusama-btn {
+            background-color: black;
+            color: #fbbf24;
+            border: 2px solid black;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        
+        .kusama-btn:hover {
+            background-color: #fbbf24;
+            color: black;
+        }
+
+        .kusama-btn-outline {
+            background-color: white;
+            color: black;
+            border: 3px solid black;
+            font-weight: 700;
+        }
+        
+        .kusama-btn-outline:hover {
+            background-color: black;
+            color: white;
+        }
+
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
         .timeline-line::before {
-            content: ''; position: absolute; top: 0; bottom: 0; left: 15px; width: 2px; background-color: #e2e8f0; z-index: 0;
+            content: ''; position: absolute; top: 0; bottom: 0; left: 19px; width: 4px; background-color: black; z-index: 0;
         }
     </style>
 </head>
@@ -57,7 +107,7 @@
         }
 
         // --- Helper Components ---
-        const Icon = ({ name, size = 18, className = "" }) => {
+        const Icon = ({ name, size = 20, className = "" }) => {
             const iconName = name.charAt(0).toLowerCase() + name.slice(1);
             return <i data-lucide={iconName} className={className} style={{ width: size, height: size, display: 'inline-block', verticalAlign: 'text-bottom' }}></i>;
         };
@@ -70,6 +120,17 @@
 
         // --- Data: V5.0 Plus Content ---
         const tripData = {
+            intro: {
+                title: "瀨戶內海・冬日藝術紀行",
+                subtitle: "慢活名園 × 購物專攻 × 職人美食",
+                desc: "這是一趟「減法」的旅程。我們放棄了趕船跳島的匆忙，選擇在栗林公園的松林間深呼吸，在高松市區享受購物的餘裕。這不是打卡比賽，而是為了找回生活節奏的五天四夜。"
+            },
+            highlights: [
+                { title: "餐飲全備案", desc: "A/B/C 三層防護網，名店、在地、保底一次擁有，拒絕排隊焦慮。", icon: "utensils" },
+                { title: "購物物理分流", desc: "Day 2 計程車搬家電，Day 4 優雅逛藥妝。不提重物逛街是鐵則。", icon: "shoppingBag" },
+                { title: "深度栗林公園", desc: "和船、抹茶、飛來峰。不只是走馬看花，而是要在三星庭園裡浪費時間。", icon: "flower" },
+                { title: "精確移動戰術", desc: "從 Uber 預約到琴電搭乘，每一段移動都經過計算，確保體力用在刀口上。", icon: "map" }
+            ],
             days: [
                 {
                     id: 1, date: "12/25 (四)", title: "啟程與溫泉聖誕夜", color: "bg-blue-600",
@@ -194,33 +255,32 @@
 
         // --- Sub-Components ---
 
-        // 1. Google Map Link Helper
         const openMap = (query) => {
             const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
             window.open(url, '_blank');
         };
 
-        // 2. Dining Modal
+        // Modal for Dining
         const DiningModal = ({ diningId, options, onClose }) => {
             if (!diningId) return null;
             const data = options[diningId];
             return (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
-                            <h3 className="font-bold text-orange-900 flex items-center gap-2">
-                                <Icon name="utensils" size={18}/> 餐飲備案
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+                    <div className="kusama-card max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="bg-black p-4 flex justify-between items-center">
+                            <h3 className="font-black text-[#fbbf24] flex items-center gap-2 text-lg uppercase tracking-wider">
+                                <Icon name="utensils" size={20}/> 餐飲備案
                             </h3>
-                            <button onClick={onClose} className="text-orange-400 hover:text-orange-600 font-bold">✕</button>
+                            <button onClick={onClose} className="text-white hover:text-[#fbbf24] font-bold text-xl">✕</button>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="p-6 space-y-4 bg-white">
                             {data && data.map((opt, idx) => (
-                                <div key={idx} className={`p-3 rounded-lg border ${opt.highlight ? 'bg-yellow-50 border-yellow-200 shadow-sm' : 'bg-white border-slate-100'}`}>
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="font-bold text-slate-800 text-sm">{opt.name}</h4>
-                                        {opt.highlight && <span className="text-[10px] bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded font-bold">推薦</span>}
+                                <div key={idx} className={`p-4 rounded-xl border-2 ${opt.highlight ? 'bg-yellow-50 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h4 className="font-bold text-black text-base">{opt.name}</h4>
+                                        {opt.highlight && <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-full font-black tracking-wide border border-black">推薦</span>}
                                     </div>
-                                    <p className="text-xs text-slate-600 leading-relaxed">{opt.desc}</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed font-medium">{opt.desc}</p>
                                 </div>
                             ))}
                         </div>
@@ -246,25 +306,24 @@
             useEffect(() => {
                 if (db) {
                     setSyncStatus('連線中...');
-                    const unsubscribe = db.collection('trips').doc('kagawa2025_v5_plus').onSnapshot((doc) => {
+                    const unsubscribe = db.collection('trips').doc('kagawa2025_v5_plus_kusama').onSnapshot((doc) => {
                         if (doc.exists) {
                             const data = doc.data();
                             if (data.notes) setUserNotes(data.notes);
                             if (data.checkedItems) setCheckedItems(data.checkedItems);
-                            setSyncStatus('☁️ 已同步');
+                            setSyncStatus('● 已同步');
                         } else {
-                            // Create doc if not exists
-                            db.collection('trips').doc('kagawa2025_v5_plus').set({ notes: {}, checkedItems: {} });
-                            setSyncStatus('☁️ 新建立');
+                            db.collection('trips').doc('kagawa2025_v5_plus_kusama').set({ notes: {}, checkedItems: {} });
+                            setSyncStatus('● 新建立');
                         }
                     }, (err) => {
                         console.error(err);
-                        setSyncStatus('❌ 同步失敗');
+                        setSyncStatus('✕ 同步失敗');
                     });
                     return () => unsubscribe();
                 } else {
                     setSyncStatus('💾 本機模式');
-                    const localData = localStorage.getItem('trip_local_v5');
+                    const localData = localStorage.getItem('trip_local_v5_kusama');
                     if (localData) {
                         const parsed = JSON.parse(localData);
                         setUserNotes(parsed.notes || {});
@@ -276,12 +335,12 @@
             const saveToCloud = (notes, checks) => {
                 if (db) {
                     setSyncStatus('儲存中...');
-                    db.collection('trips').doc('kagawa2025_v5_plus').set({
+                    db.collection('trips').doc('kagawa2025_v5_plus_kusama').set({
                         notes: notes,
                         checkedItems: checks
-                    }, { merge: true }).then(() => setSyncStatus('☁️ 已同步'));
+                    }, { merge: true }).then(() => setSyncStatus('● 已同步'));
                 } else {
-                    localStorage.setItem('trip_local_v5', JSON.stringify({ notes, checkedItems: checks }));
+                    localStorage.setItem('trip_local_v5_kusama', JSON.stringify({ notes, checkedItems: checks }));
                 }
             };
 
@@ -294,120 +353,140 @@
             const handleNote = (day, text) => {
                 const newNotes = { ...userNotes, [day]: text };
                 setUserNotes(newNotes);
-                // Debounce save
                 if (window.saveTimer) clearTimeout(window.saveTimer);
                 window.saveTimer = setTimeout(() => saveToCloud(newNotes, checkedItems), 1000);
             };
 
-            // Views
+            // Responsive Layout: Dashboard
             const renderDashboard = () => (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
-                        <h2 className="text-lg font-bold text-slate-800 mb-2">核心策略：減法與分流</h2>
-                        <p className="text-slate-600 text-sm leading-relaxed">
-                            V5.0+ 採用<span className="font-bold text-red-500">「放棄直島」</span>策略，將時間投資於栗林公園深度遊與高松市區。購物依據重量進行物理分流：Day 2 專攻重物（計程車支援），Day 4 專攻輕物（步行支援）。
-                        </p>
+                <div className="animate-fade-in space-y-8">
+                    {/* Hero Section */}
+                    <div className="kusama-card p-8 md:p-12 relative overflow-hidden bg-white">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#fbbf24] rounded-full -mr-16 -mt-16 border-4 border-black"></div>
+                        <div className="relative z-10">
+                            <h2 className="text-3xl md:text-5xl font-black text-black mb-4 tracking-tighter uppercase">
+                                {tripData.intro.title}
+                            </h2>
+                            <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-6 border-l-8 border-black pl-4">
+                                {tripData.intro.subtitle}
+                            </h3>
+                            <p className="text-gray-800 text-lg leading-relaxed max-w-2xl font-medium">
+                                {tripData.intro.desc}
+                            </p>
+                        </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-orange-50 p-4 rounded-xl text-center" onClick={() => setView('itinerary')}>
-                            <div className="text-2xl mb-1">📅</div>
-                            <div className="font-bold text-slate-700 text-sm">每日行程</div>
-                        </div>
-                        <div className="bg-blue-50 p-4 rounded-xl text-center" onClick={() => setView('shopping')}>
-                            <div className="text-2xl mb-1">🛍️</div>
-                            <div className="font-bold text-slate-700 text-sm">購物戰略</div>
-                        </div>
-                        <div className="bg-green-50 p-4 rounded-xl text-center" onClick={() => setView('checklist')}>
-                            <div className="text-2xl mb-1">✅</div>
-                            <div className="font-bold text-slate-700 text-sm">行前清單</div>
-                        </div>
-                        <div className="bg-slate-50 p-4 rounded-xl text-center">
-                            <div className="text-2xl mb-1">📊</div>
-                            <div className="font-bold text-slate-700 text-sm">{syncStatus}</div>
-                        </div>
+
+                    {/* Highlights Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {tripData.highlights.map((h, idx) => (
+                            <div key={idx} className="kusama-card p-6 bg-white hover:bg-yellow-50">
+                                <div className="w-12 h-12 rounded-full bg-black text-[#fbbf24] flex items-center justify-center mb-4 border-2 border-[#fbbf24]">
+                                    <Icon name={h.icon} size={24}/>
+                                </div>
+                                <h4 className="text-lg font-black text-black mb-2">{h.title}</h4>
+                                <p className="text-sm text-gray-600 font-bold">{h.desc}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
 
+            // Responsive Layout: Itinerary
             const renderItinerary = () => {
                 const day = tripData.days[dayIdx];
                 return (
-                    <div className="animate-fade-in">
-                        {/* Day Tabs */}
-                        <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-hide">
+                    <div className="animate-fade-in flex flex-col lg:flex-row gap-8">
+                        {/* Sidebar: Day Tabs (Desktop) / Horizontal Scroll (Mobile) */}
+                        <div className="lg:w-1/4 w-full flex lg:flex-col overflow-x-auto lg:overflow-visible gap-3 pb-2 lg:pb-0">
                             {tripData.days.map((d, idx) => (
                                 <button 
                                     key={idx}
                                     onClick={() => setDayIdx(idx)}
-                                    className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                                    className={`flex-shrink-0 lg:w-full px-6 py-4 rounded-2xl font-black text-left transition-all border-4 ${
                                         dayIdx === idx 
-                                        ? `bg-slate-800 text-white border-slate-800 shadow-md transform -translate-y-0.5` 
-                                        : 'bg-white text-slate-500 border-slate-200'
+                                        ? 'bg-black text-[#fbbf24] border-black shadow-[4px_4px_0px_0px_#fbbf24] transform -translate-y-1' 
+                                        : 'bg-white text-black border-black hover:bg-gray-100'
                                     }`}
                                 >
-                                    {d.date.split(" ")[0]}
+                                    <span className="text-xs opacity-70 block mb-1 uppercase tracking-widest">{d.date.split(" ")[0]}</span>
+                                    <span className="text-xl">{d.title.split(" ")[0]}</span>
                                 </button>
                             ))}
                         </div>
 
-                        {/* Timeline */}
-                        <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100 min-h-[50vh]">
-                            <div className="mb-6">
-                                <h3 className={`text-xl font-black ${day.color.replace('bg-', 'text-')}`}>{day.title}</h3>
-                                <p className="text-xs text-slate-400 font-medium mt-1">{day.date} · {day.highlight}</p>
-                            </div>
-
-                            <div className="space-y-6 relative pl-4">
-                                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                                {day.events.map((ev, i) => (
-                                    <div key={i} className="relative flex gap-4 items-start">
-                                        <div className={`z-10 w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm border-2 border-white ${
-                                            ev.type === 'critical' ? 'bg-red-100 text-red-600' : 
-                                            ev.type === 'dining' ? 'bg-orange-100 text-orange-600' : 
-                                            'bg-slate-100 text-slate-500'
-                                        }`}>
-                                            <Icon name={ev.icon} size={18}/>
+                        {/* Content: Timeline */}
+                        <div className="lg:w-3/4 w-full">
+                            <div className="kusama-card p-6 md:p-10 min-h-[60vh] bg-white">
+                                <div className="mb-8 border-b-4 border-black pb-6 flex justify-between items-end">
+                                    <div>
+                                        <h3 className="text-3xl md:text-4xl font-black text-black mb-2">{day.title}</h3>
+                                        <div className="inline-block bg-[#fbbf24] border-2 border-black px-3 py-1 rounded-full text-xs font-bold text-black uppercase tracking-wide">
+                                            {day.date}
                                         </div>
-                                        <div className="flex-1 pt-1">
-                                            <div className="flex justify-between items-start">
-                                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">{ev.time}</span>
-                                                {ev.mapQuery && (
-                                                    <button onClick={() => openMap(ev.mapQuery)} className="text-blue-400 hover:text-blue-600 p-1">
-                                                        <Icon name="mapPin" size={16}/>
+                                    </div>
+                                    <div className="hidden md:block text-right">
+                                        <div className="text-sm font-bold text-gray-500 uppercase">Today's Highlight</div>
+                                        <div className="text-lg font-black text-black">{day.highlight}</div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8 relative pl-6">
+                                    <div className="absolute left-[23px] top-4 bottom-4 w-1 bg-black opacity-10"></div>
+                                    {day.events.map((ev, i) => (
+                                        <div key={i} className="relative flex gap-6 items-start group">
+                                            {/* Icon Bubble */}
+                                            <div className={`z-10 w-12 h-12 rounded-full flex items-center justify-center shrink-0 border-4 border-black bg-white group-hover:scale-110 transition-transform ${
+                                                ev.type === 'critical' ? 'bg-red-500 text-white' : 
+                                                ev.type === 'dining' ? 'bg-[#fbbf24] text-black' : 
+                                                'text-black'
+                                            }`}>
+                                                <Icon name={ev.icon} size={20}/>
+                                            </div>
+                                            
+                                            <div className="flex-1 pt-1">
+                                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2">
+                                                    <h4 className={`text-xl font-black ${ev.type === 'critical' ? 'text-red-600' : 'text-black'}`}>
+                                                        {ev.title}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2 mt-1 sm:mt-0">
+                                                        <span className="font-bold text-sm bg-black text-white px-2 py-0.5 rounded">{ev.time}</span>
+                                                        {ev.mapQuery && (
+                                                            <button onClick={() => openMap(ev.mapQuery)} className="text-gray-400 hover:text-red-500 transition-colors" title="Open Map">
+                                                                <Icon name="mapPin" size={18}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <p className="text-base text-gray-700 font-medium leading-relaxed">{ev.desc}</p>
+                                                
+                                                {ev.type === 'dining' && (
+                                                    <button 
+                                                        onClick={() => setDiningId(ev.diningId)}
+                                                        className="mt-3 text-sm font-black text-black underline decoration-4 decoration-[#fbbf24] underline-offset-4 hover:decoration-red-500 transition-all flex items-center gap-1"
+                                                    >
+                                                        查看 3 層備案 <Icon name="chevronDown" size={16}/>
                                                     </button>
                                                 )}
                                             </div>
-                                            <h4 className={`text-sm font-bold mt-1 ${ev.type === 'critical' ? 'text-red-700' : 'text-slate-800'}`}>
-                                                {ev.title}
-                                            </h4>
-                                            <p className="text-xs text-slate-500 leading-relaxed mt-1">{ev.desc}</p>
-                                            
-                                            {ev.type === 'dining' && (
-                                                <button 
-                                                    onClick={() => setDiningId(ev.diningId)}
-                                                    className="mt-2 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded hover:bg-orange-100 transition-colors flex items-center gap-1"
-                                                >
-                                                    <Icon name="chevronDown" size={12}/> 查看 3 層備案
-                                                </button>
-                                            )}
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
 
-                            {/* Daily Note */}
-                            <div className="mt-8 pt-6 border-t border-dashed border-slate-200">
-                                <label className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-1">
-                                    <Icon name="edit3" size={12}/> {day.date} 隨手記
-                                </label>
-                                <textarea 
-                                    className="w-full bg-yellow-50/50 rounded-xl p-3 text-sm text-slate-700 focus:ring-2 focus:ring-yellow-400 outline-none border border-yellow-100 resize-none placeholder-slate-300"
-                                    rows="3"
-                                    placeholder="紀錄花費、心情..."
-                                    value={userNotes[day.id] || ''}
-                                    onChange={(e) => handleNote(day.id, e.target.value)}
-                                />
+                                {/* Note Area */}
+                                <div className="mt-12 bg-[#fbbf24] p-1 rounded-xl transform rotate-1">
+                                    <div className="bg-white p-4 rounded-lg border-2 border-black h-full">
+                                        <label className="text-xs font-black text-black uppercase mb-2 block tracking-widest flex items-center gap-2">
+                                            <Icon name="penTool" size={14}/> {day.date} Memo
+                                        </label>
+                                        <textarea 
+                                            className="w-full bg-transparent text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none resize-none"
+                                            rows="3"
+                                            placeholder="Write something..."
+                                            value={userNotes[day.id] || ''}
+                                            onChange={(e) => handleNote(day.id, e.target.value)}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -415,29 +494,33 @@
             };
 
             const renderShopping = () => (
-                <div className="space-y-6 animate-fade-in">
+                <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Heavy List */}
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
-                        <div className="bg-red-50 p-4 border-b border-red-100">
-                            <h3 className="font-bold text-red-800 flex items-center gap-2">
-                                <Icon name="weight" size={18}/> Day 2: 重物家電戰
+                    <div className="kusama-card bg-white overflow-hidden">
+                        <div className="bg-red-500 p-6 border-b-4 border-black">
+                            <h3 className="text-2xl font-black text-white flex items-center gap-3">
+                                <div className="bg-black p-2 rounded-full"><Icon name="weight" size={24} className="text-white"/></div>
+                                Day 2: 重物家電
                             </h3>
-                            <p className="text-xs text-red-600 mt-1">Rainbow Road (DCM/Yamada) · 計程車往返</p>
+                            <p className="text-white font-bold mt-2 opacity-90">Rainbow Road (DCM/Yamada) · 計程車</p>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="p-6 space-y-4">
                             {tripData.shoppingHeavy.map((item, idx) => (
-                                <label key={idx} className="flex items-start gap-3 cursor-pointer group">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={checkedItems[item.id] || false}
-                                        onChange={() => handleCheck(item.id)}
-                                        className="mt-1 w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
-                                    />
-                                    <div>
-                                        <span className={`text-sm font-medium block transition-colors ${checkedItems[item.id] ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-red-700'}`}>
+                                <label key={idx} className="flex items-start gap-4 cursor-pointer group p-2 hover:bg-red-50 rounded-xl transition-colors">
+                                    <div className="relative flex items-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={checkedItems[item.id] || false}
+                                            onChange={() => handleCheck(item.id)}
+                                            className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-black bg-white transition-all checked:bg-red-500 checked:border-red-500"
+                                        />
+                                        <Icon name="check" size={16} className="absolute left-1 top-1 text-white opacity-0 peer-checked:opacity-100 pointer-events-none"/>
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className={`text-lg font-bold block transition-colors ${checkedItems[item.id] ? 'text-gray-400 line-through decoration-2' : 'text-black'}`}>
                                             {item.item}
                                         </span>
-                                        <span className="text-xs text-slate-400 block">{item.note} @{item.loc}</span>
+                                        <span className="text-sm font-bold text-gray-500 block mt-1">{item.note} <span className="bg-black text-white px-1.5 rounded text-xs ml-1">@{item.loc}</span></span>
                                     </div>
                                 </label>
                             ))}
@@ -445,27 +528,31 @@
                     </div>
 
                     {/* Light List */}
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
-                        <div className="bg-blue-50 p-4 border-b border-blue-100">
-                            <h3 className="font-bold text-blue-800 flex items-center gap-2">
-                                <Icon name="feather" size={18}/> Day 4: 輕物藥妝戰
+                    <div className="kusama-card bg-white overflow-hidden">
+                        <div className="bg-[#fbbf24] p-6 border-b-4 border-black">
+                            <h3 className="text-2xl font-black text-black flex items-center gap-3">
+                                <div className="bg-black p-2 rounded-full"><Icon name="feather" size={24} className="text-[#fbbf24]"/></div>
+                                Day 4: 輕物藥妝
                             </h3>
-                            <p className="text-xs text-blue-600 mt-1">瓦町 & 商店街 · 步行</p>
+                            <p className="text-black font-bold mt-2 opacity-80">瓦町 & 商店街 · 步行</p>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="p-6 space-y-4">
                             {tripData.shoppingLight.map((item, idx) => (
-                                <label key={idx} className="flex items-start gap-3 cursor-pointer group">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={checkedItems[item.id] || false}
-                                        onChange={() => handleCheck(item.id)}
-                                        className="mt-1 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-                                    />
-                                    <div>
-                                        <span className={`text-sm font-medium block transition-colors ${checkedItems[item.id] ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-blue-700'}`}>
+                                <label key={idx} className="flex items-start gap-4 cursor-pointer group p-2 hover:bg-yellow-50 rounded-xl transition-colors">
+                                    <div className="relative flex items-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={checkedItems[item.id] || false}
+                                            onChange={() => handleCheck(item.id)}
+                                            className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-black bg-white transition-all checked:bg-black checked:border-black"
+                                        />
+                                        <Icon name="check" size={16} className="absolute left-1 top-1 text-[#fbbf24] opacity-0 peer-checked:opacity-100 pointer-events-none"/>
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className={`text-lg font-bold block transition-colors ${checkedItems[item.id] ? 'text-gray-400 line-through decoration-2' : 'text-black'}`}>
                                             {item.item}
                                         </span>
-                                        <span className="text-xs text-slate-400 block">{item.note} @{item.loc}</span>
+                                        <span className="text-sm font-bold text-gray-500 block mt-1">{item.note} <span className="bg-black text-white px-1.5 rounded text-xs ml-1">@{item.loc}</span></span>
                                     </div>
                                 </label>
                             ))}
@@ -475,50 +562,80 @@
             );
 
             const renderChecklist = () => (
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200 animate-fade-in">
-                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <Icon name="checkCircle" className="text-green-500"/> 行前 & 關鍵行動
-                    </h2>
-                    <div className="space-y-4">
-                        {tripData.checklist.map((item, idx) => (
-                            <label key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
-                                <input 
-                                    type="checkbox" 
-                                    checked={checkedItems[`chk_${idx}`] || false}
-                                    onChange={() => handleCheck(`chk_${idx}`)}
-                                    className="w-5 h-5 text-green-600 rounded focus:ring-green-500 border-slate-300"
-                                />
-                                <span className={`text-sm font-medium ${checkedItems[`chk_${idx}`] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                                    {item}
-                                </span>
-                            </label>
-                        ))}
+                <div className="animate-fade-in max-w-2xl mx-auto">
+                    <div className="kusama-card bg-white p-8">
+                        <h2 className="text-2xl font-black text-black mb-6 flex items-center gap-3 border-b-4 border-green-500 pb-4 inline-block">
+                            <Icon name="checkCircle" className="text-green-500" size={28}/> 行前 & 關鍵行動
+                        </h2>
+                        <div className="space-y-4">
+                            {tripData.checklist.map((item, idx) => (
+                                <label key={idx} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-green-50 transition-colors cursor-pointer border-2 border-transparent hover:border-green-200">
+                                    <div className="relative flex items-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={checkedItems[`chk_${idx}`] || false}
+                                            onChange={() => handleCheck(`chk_${idx}`)}
+                                            className="peer h-6 w-6 cursor-pointer appearance-none rounded-full border-2 border-black bg-white transition-all checked:bg-green-500 checked:border-green-500"
+                                        />
+                                        <Icon name="check" size={14} className="absolute left-1 top-1 text-white opacity-0 peer-checked:opacity-100 pointer-events-none"/>
+                                    </div>
+                                    <span className={`text-base font-bold ${checkedItems[`chk_${idx}`] ? 'text-gray-400 line-through decoration-2' : 'text-gray-800'}`}>
+                                        {item}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
                     </div>
                 </div>
             );
 
             return (
-                <div className="max-w-md mx-auto min-h-screen flex flex-col pb-20">
-                    {/* Header */}
-                    <div className="bg-white p-4 shadow-sm sticky top-0 z-30 flex justify-between items-center">
-                        <h1 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                            🇯🇵 瀨戶內海戰情室
-                        </h1>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${syncStatus.includes('同步') ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                            {syncStatus}
-                        </span>
+                <div className="min-h-screen flex flex-col pb-24 md:pb-0">
+                    {/* Top Bar */}
+                    <div className="bg-black text-white px-4 py-3 sticky top-0 z-50 shadow-md">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <h1 className="text-lg md:text-xl font-black flex items-center gap-2 tracking-wider">
+                                <span className="text-[#fbbf24] text-2xl">●</span> KAGAWA TRIP <span className="text-[#fbbf24]">V5.0+</span>
+                            </h1>
+                            <div className="flex items-center gap-4">
+                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${syncStatus.includes('已同步') ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                    {syncStatus}
+                                </span>
+                                {/* Desktop Nav */}
+                                <div className="hidden md:flex gap-2">
+                                    {[
+                                        { id: 'dashboard', icon: 'layoutDashboard', label: '戰情室' },
+                                        { id: 'itinerary', icon: 'map', label: '每日行程' },
+                                        { id: 'shopping', icon: 'shoppingBag', label: '購物戰略' },
+                                        { id: 'checklist', icon: 'checkSquare', label: '檢查表' },
+                                    ].map(tab => (
+                                        <button 
+                                            key={tab.id}
+                                            onClick={() => setView(tab.id)}
+                                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 ${
+                                                view === tab.id 
+                                                ? 'bg-[#fbbf24] text-black' 
+                                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <Icon name={tab.icon} size={16}/> {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 p-4 overflow-y-auto">
+                    {/* Content Area */}
+                    <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
                         {view === 'dashboard' && renderDashboard()}
                         {view === 'itinerary' && renderItinerary()}
                         {view === 'shopping' && renderShopping()}
                         {view === 'checklist' && renderChecklist()}
                     </div>
 
-                    {/* Bottom Nav */}
-                    <div className="fixed bottom-0 w-full max-w-md bg-white border-t border-slate-200 flex justify-around py-3 pb-safe z-40">
+                    {/* Mobile Bottom Nav */}
+                    <div className="md:hidden fixed bottom-0 w-full bg-black border-t-4 border-[#fbbf24] flex justify-around py-3 pb-safe z-40">
                         {[
                             { id: 'dashboard', icon: 'layoutDashboard', label: '總覽' },
                             { id: 'itinerary', icon: 'map', label: '行程' },
@@ -528,10 +645,10 @@
                             <button 
                                 key={tab.id}
                                 onClick={() => setView(tab.id)}
-                                className={`flex flex-col items-center gap-1 ${view === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
+                                className={`flex flex-col items-center gap-1 ${view === tab.id ? 'text-[#fbbf24]' : 'text-gray-500'}`}
                             >
-                                <Icon name={tab.icon} size={20} />
-                                <span className="text-[10px] font-bold">{tab.label}</span>
+                                <Icon name={tab.icon} size={24} />
+                                <span className="text-[10px] font-black tracking-wide">{tab.label}</span>
                             </button>
                         ))}
                     </div>
