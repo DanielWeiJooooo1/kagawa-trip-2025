@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>瀨戶內海冬季任務指揮中心</title>
+    <!-- 引入 React 和 ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- 引入 Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 自定義捲軸隱藏 */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 簡單的淡入動畫 */
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // 由於 Lucide React 在 CDN 環境下無法直接解構，我們需要一個 Helper 來生成 SVG
+        // 這裡我們簡單定義圖標組件，對應 lucide-react 的圖標
+        // 注意：為了簡化，這裡使用 Lucide 的全域 createIcons 方法在 render 後替換 i 標籤，
+        // 或者更簡單地，我們直接用 SVG 字符串或簡單的 icon mapping。
+        // 在這個單一文件版本中，為了確保 icon 顯示，我們使用 lucide.icons 的 SVG 內容
+        
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const iconName = name.charAt(0).toLowerCase() + name.slice(1);
+            // Lucide 全域變數名為 lucide
+            // 這裡我們用一個簡單的替換方案，讓圖標能在瀏覽器渲染
+            // 實際在瀏覽器端使用 lucide-react 比較麻煩，我們改用 lucide.createIcons
+            return <i data-lucide={iconName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
+        };
+
+        // 為了讓 React 重新渲染時圖標也能更新
+        const useLucide = () => {
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+        };
+
+        const TripPlanner = () => {
+            const [activeTab, setActiveTab] = useState(0);
+            const [notes, setNotes] = useState({
+                0: '', 1: '', 2: '', 3: '', 4: ''
+            });
+            const [checkedItems, setCheckedItems] = useState({});
+            const [showMap, setShowMap] = useState(false);
+            const [currentMapUrl, setCurrentMapUrl] = useState('');
+            const [currentMapTitle, setCurrentMapTitle] = useState('');
+
+            useLucide(); // 每次渲染後更新圖標
+
+            const handleCheck = (id) => {
+                setCheckedItems(prev => ({
+                    ...prev,
+                    [id]: !prev[id]
+                }));
+            };
+
+            const handleNoteChange = (dayIndex, text) => {
+                setNotes(prev => ({
+                    ...prev,
+                    [dayIndex]: text
+                }));
+            };
+
+            const getDirLink = (origin, dest) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=transit`;
+            const getPlaceLink = (query) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+            const getEmbedUrl = (query) => `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
+
+            const openMap = (title, query) => {
+                setCurrentMapTitle(title);
+                setCurrentMapUrl(getEmbedUrl(query));
+                setShowMap(true);
+            };
+
+            const kusamaColors = {
+                yellow: 'bg-yellow-400',
+                yellowLight: 'bg-yellow-50',
+                red: 'bg-red-500',
+                redLight: 'bg-red-50',
+                black: 'text-gray-900',
+                white: 'bg-white',
+                dotPattern: "radial-gradient(#00000020 2px, transparent 2px)",
+            };
+
+            const itinerary = [
+                {
+                    day: "Day 1",
+                    date: "12/25 (四)",
+                    theme: "聖誕入宿與溫泉",
+                    themeColor: "text-blue-600",
+                    accentColor: "border-blue-500",
+                    bgColor: "bg-blue-50",
+                    highlight: "直奔琴平溫泉，享受飯店設施",
+                    stay: "ことひら温泉 琴參閣",
+                    stayQuery: "ことひら温泉 琴参閣",
+                    details: [
+                        { time: "08:50", icon: "plane", text: "台中機場起飛 (JX300)" },
+                        { time: "12:20", icon: "mapPin", text: "抵達高松機場 (領取優惠券包)", mapQuery: "高松機場" },
+                        { time: "13:00", icon: "bus", text: "搭乘機場巴士（琴平線）直達飯店", mapQuery: "高松機場 to ことひら温泉 琴参閣" },
+                        { time: "15:00", icon: "moon", text: "入住琴參閣，享受展望風呂與日式客房", mapQuery: "ことひら温泉 琴参閣" },
+                        { time: "18:00", icon: "utensils", text: "琴平溫泉街晚餐 (骨付鳥一鶴或飯店懷石)", mapQuery: "骨付鳥 一鶴 琴平店" }
+                    ],
+                    strategy: "第一天不排滿，利用星宇下午抵達的時間差，直接入住高級溫泉飯店放鬆，調整成度假模式。",
+                    actionItems: [
+                        { id: "d1-1", text: "確認機場巴士（琴平線）時刻表" },
+                        { id: "d1-2", text: "確認琴參閣晚餐是否需要預約" }
+                    ]
+                },
+                {
+                    day: "Day 2",
+                    date: "12/26 (五)",
+                    theme: "文化體驗與防災採購",
+                    themeColor: "text-amber-600",
+                    accentColor: "border-amber-500",
+                    bgColor: "bg-amber-50",
+                    highlight: "資生堂神椿下午茶 & 輕裝購物",
+                    stay: "Super Hotel 高松禁煙館",
+                    stayQuery: "スーパーホテル高松禁煙館",
+                    details: [
+                        { time: "10:00", icon: "sun", text: "金刀比羅宮散策 (目標：500階)", mapQuery: "金刀比羅宮" },
+                        { time: "11:30", icon: "coffee", text: "神椿 (Kamitsubaki) 資生堂下午茶/午餐", mapQuery: "資生堂パーラー 神椿" },
+                        { time: "13:30", icon: "bus", text: "搭乘琴電 (Kotoden) 返回高松市區", mapQuery: "琴電琴平駅" },
+                        { time: "15:00", icon: "shoppingBag", text: "飯店寄放行李 → 瓦町/DCM 採買防災用品", mapQuery: "DCM Takamatsu" },
+                        { time: "18:00", icon: "moon", text: "入住 Super Hotel (享受天然溫泉)", mapQuery: "スーパーホテル高松禁煙館" }
+                    ],
+                    strategy: "不強求爬完 1368 階，改為優雅的下午茶行程。先回飯店放行李再購物，避免提重物移動。",
+                    actionItems: [
+                        { id: "d2-1", text: "列出防災用品採購清單" },
+                        { id: "d2-2", text: "購買 IruCa 交通卡" }
+                    ]
+                },
+                {
+                    day: "Day 3",
+                    date: "12/27 (六)",
+                    theme: "小豆島公車漫遊",
+                    themeColor: "text-green-600",
+                    accentColor: "border-green-500",
+                    bgColor: "bg-green-50",
+                    highlight: "魔女宅急便風車 & 天使之路潮汐",
+                    stay: "Super Hotel 高松禁煙館",
+                    stayQuery: "スーパーホテル高松禁煙館",
+                    details: [
+                        { time: "09:00", icon: "ship", text: "高松港搭乘渡輪 (使用免費券) → 土庄港", mapQuery: "土庄港" },
+                        { time: "10:30", icon: "bus", text: "轉乘橄欖巴士 → 橄欖公園 (白色風車)", mapQuery: "道の駅 小豆島オリーブ公園" },
+                        { time: "12:30", icon: "utensils", text: "園區內午餐 (橄欖油料理)", mapQuery: "道の駅 小豆島オリーブ公園" },
+                        { time: "15:30", icon: "camera", text: "天使之路 (Angel Road) *配合乾潮時間", mapQuery: "エンジェルロード" },
+                        { time: "17:30", icon: "ship", text: "搭船返回高松，市區晚餐", mapQuery: "高松港" }
+                    ],
+                    strategy: "因租車滿額改為公車遊。放棄偏遠景點，專注於交通方便的橄欖公園與天使之路，步調更悠閒。",
+                    actionItems: [
+                        { id: "d3-1", text: "下載小豆島橄欖巴士時刻表" },
+                        { id: "d3-2", text: "再次確認 12/27 當日乾潮時間" }
+                    ]
+                },
+                {
+                    day: "Day 4",
+                    date: "12/28 (日)",
+                    theme: "直島南瓜與名園抹茶",
+                    themeColor: "text-red-600",
+                    accentColor: "border-red-500",
+                    bgColor: "bg-red-50",
+                    highlight: "草間彌生南瓜朝聖 & 栗林公園",
+                    stay: "Super Hotel 高松禁煙館",
+                    stayQuery: "スーパーホテル高松禁煙館",
+                    details: [
+                        { time: "09:00", icon: "ship", text: "高松港 → 直島宮浦港 (紅南瓜合影)", mapQuery: "直島宮浦港" },
+                        { time: "10:30", icon: "bus", text: "搭乘場內巴士 → 杜鵑莊 (黃南瓜朝聖)", mapQuery: "つつじ荘" },
+                        { time: "14:20", icon: "ship", text: "搭船返回高松", mapQuery: "高松港" },
+                        { time: "15:30", icon: "bus", text: "計程車直奔栗林公園", mapQuery: "栗林公園" },
+                        { time: "16:00", icon: "coffee", text: "掬月亭抹茶體驗 (趕在 17:30 閉園前)", mapQuery: "掬月亭" }
+                    ],
+                    strategy: "即使週日美術館休館，但「南瓜」是戶外裝置不受影響。下午接栗林公園，利用免費入園票。",
+                    actionItems: [
+                        { id: "d4-1", text: "準備直島渡輪船費 (不含在免費券內)" },
+                        { id: "d4-2", text: "確認栗林公園掬月亭最後點餐時間" }
+                    ]
+                },
+                {
+                    day: "Day 5",
+                    date: "12/29 (一)",
+                    theme: "職人烏龍麵與歸途",
+                    themeColor: "text-purple-600",
+                    accentColor: "border-purple-500",
+                    bgColor: "bg-purple-50",
+                    highlight: "清晨排隊名店 & 機場最後衝刺",
+                    stay: "溫暖的家",
+                    details: [
+                        { time: "06:00", icon: "utensils", text: "步行至「手打十段 傻瓜一代」吃早餐", mapQuery: "手打十段 うどんバカ一代" },
+                        { time: "09:00", icon: "shoppingBag", text: "瓦町商店街最後補貨 / 整理行李", mapQuery: "高松丸亀町商店街" },
+                        { time: "11:00", icon: "bus", text: "搭乘機場巴士前往高松機場", mapQuery: "高松機場" },
+                        { time: "13:20", icon: "plane", text: "星宇航空 JX301 起飛返台" }
+                    ],
+                    strategy: "利用早晨時間體驗在地「朝烏龍」文化。預留充足時間前往機場，避免年末人潮延誤。",
+                    actionItems: [
+                        { id: "d5-1", text: "Day 1 抵達時先確認烏龍麵店 29 號是否有開" },
+                        { id: "d5-2", text: "確認機場巴士回程票券是否在身上" }
+                    ]
+                }
+            ];
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 min-h-screen font-sans relative" 
+                     style={{
+                       backgroundColor: '#fbbf24',
+                       backgroundImage: kusamaColors.dotPattern,
+                       backgroundSize: '24px 24px'
+                     }}>
+                  
+                  {/* Header Card */}
+                  <div className="bg-white rounded-3xl shadow-xl p-8 mb-8 border-4 border-black relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-red-500 rounded-full -mr-10 -mt-10 opacity-20"></div>
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-yellow-400 rounded-full -ml-8 -mb-8 opacity-20"></div>
+                    
+                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-3 tracking-tight">
+                      🚢 瀨戶內海冬季任務指揮中心
+                    </h1>
+                    <div className="flex flex-wrap items-center gap-3 text-gray-700 font-bold">
+                      <span className="bg-yellow-300 border-2 border-black px-3 py-1 rounded-full text-sm">2025/12/25 - 12/29</span>
+                      <span className="flex items-center gap-1"><Icon name="mapPin" size={16}/> 高松・小豆島・直島・琴平</span>
+                    </div>
+                    <div className="mt-6 flex flex-wrap gap-4 text-sm font-medium text-gray-600 bg-gray-50 p-4 rounded-xl border-2 border-gray-100">
+                      <div className="flex items-center gap-2"><Icon name="plane" size={18} className="text-blue-500"/> 星宇 JX300 / JX301</div>
+                      <div className="flex items-center gap-2"><Icon name="info" size={18} className="text-red-500"/> 旅客：魏銓德 & 黃子晏</div>
+                    </div>
+                  </div>
+
+                  {/* Tabs */}
+                  <div className="flex overflow-x-auto gap-3 mb-8 pb-4 scrollbar-hide px-2">
+                    {itinerary.map((item, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setActiveTab(index)}
+                        className={`flex-shrink-0 px-6 py-4 rounded-2xl font-bold transition-all duration-300 border-b-4 ${
+                          activeTab === index 
+                            ? 'bg-black text-yellow-400 border-black transform -translate-y-1 shadow-lg' 
+                            : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="text-xs uppercase tracking-wider opacity-80 mb-1">{item.date}</div>
+                        <div className="text-lg">{item.day}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Main Content Area */}
+                  <div className="grid md:grid-cols-3 gap-6">
+                    
+                    {/* Left Column: Itinerary Details */}
+                    <div className="md:col-span-2 space-y-6">
+                      <div className={`bg-white rounded-3xl shadow-xl p-8 border-l-8 ${itinerary[activeTab].accentColor}`}>
+                        <div className="flex justify-between items-start mb-4">
+                          <h2 className={`text-2xl font-black ${itinerary[activeTab].themeColor} mb-2`}>{itinerary[activeTab].theme}</h2>
+                          {activeTab === 3 && <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">南瓜重點日</div>}
+                        </div>
+                        
+                        <p className="bg-gray-100 px-4 py-2 rounded-lg text-gray-700 font-bold mb-6 inline-block text-sm">
+                          ✨ 亮點：{itinerary[activeTab].highlight}
+                        </p>
+                        
+                        <div className="space-y-4">
+                          {itinerary[activeTab].details.map((detail, idx) => (
+                            <div key={idx} className="flex items-center gap-4 group bg-white hover:bg-gray-50 p-3 rounded-xl transition-colors border border-transparent hover:border-gray-200">
+                              <div className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-black text-white shadow-md`}>
+                                <Icon name={detail.icon} size={20} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-bold text-gray-900">{detail.time}</div>
+                                <div className="text-gray-600 font-medium text-sm">{detail.text}</div>
+                              </div>
+                              {detail.mapQuery && (
+                                <button 
+                                  onClick={() => openMap(detail.text, detail.mapQuery)}
+                                  className="flex-shrink-0 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                  title="在地圖視窗中查看"
+                                >
+                                  <Icon name="map" size={20} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200">
+                          <div className="flex items-center gap-2 text-sm font-bold text-gray-500 mb-2">
+                            <Icon name="moon" size={16} /> 住宿安排
+                          </div>
+                          <div className="flex items-center justify-between bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                            <div className="font-bold text-indigo-900">{itinerary[activeTab].stay}</div>
+                            {itinerary[activeTab].stayQuery && (
+                              <button 
+                                onClick={() => openMap(itinerary[activeTab].stay, itinerary[activeTab].stayQuery)}
+                                className="text-xs bg-white text-indigo-600 px-3 py-1.5 rounded-full font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-1"
+                              >
+                                位置 <Icon name="map" size={12}/>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Strategy Box */}
+                      <div className="bg-black text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-400 rounded-full blur-xl opacity-20"></div>
+                        <h3 className="font-bold text-yellow-400 mb-3 flex items-center gap-2 text-lg">
+                          <Icon name="info" size={20}/> 策略思考
+                        </h3>
+                        <p className="text-gray-300 text-sm leading-relaxed font-medium">
+                          {itinerary[activeTab].strategy}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Interactive Tools */}
+                    <div className="space-y-6">
+                      
+                      {/* Action Items Checklist */}
+                      <div className="bg-white rounded-3xl shadow-xl p-6 border-2 border-gray-100">
+                        <h3 className="font-black text-gray-900 mb-4 flex items-center gap-2 text-lg border-b-2 border-yellow-200 pb-2 inline-block">
+                          <Icon name="checkSquare" size={20} className="text-green-500"/>
+                          任務清單
+                        </h3>
+                        <div className="space-y-3">
+                          {itinerary[activeTab].actionItems.map((item) => (
+                            <label key={item.id} className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-yellow-50 rounded-xl transition-all border border-gray-100 hover:border-yellow-200">
+                              <input 
+                                type="checkbox" 
+                                checked={checkedItems[item.id] || false}
+                                onChange={() => handleCheck(item.id)}
+                                className="mt-1 w-4 h-4 rounded text-black focus:ring-black border-gray-300"
+                              />
+                              <span className={`text-sm font-medium ${checkedItems[item.id] ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                {item.text}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Discussion Notes */}
+                      <div className="bg-yellow-300 rounded-3xl shadow-xl p-1 pb-3 transform rotate-1 hover:rotate-0 transition-transform duration-300">
+                         <div className="bg-white rounded-[20px] p-5 h-64 flex flex-col">
+                          <h3 className="font-black text-gray-900 mb-3 flex items-center gap-2">
+                            <Icon name="edit3" size={18} className="text-black"/>
+                            討論筆記
+                          </h3>
+                          <textarea 
+                            className="flex-1 w-full p-4 bg-yellow-50 rounded-xl text-gray-800 text-sm font-medium focus:ring-2 focus:ring-yellow-400 outline-none resize-none border-2 border-transparent focus:border-yellow-200 placeholder-gray-400"
+                            placeholder={`寫下關於 ${itinerary[activeTab].day} 的想法...`}
+                            value={notes[activeTab]}
+                            onChange={(e) => handleNoteChange(activeTab, e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Map Modal */}
+                  {showMap && (
+                    <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-fade-in-up border-4 border-yellow-400">
+                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                          <h3 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
+                            <div className="bg-red-500 p-1.5 rounded-full text-white">
+                              <Icon name="mapPin" size={16} className="text-white" />
+                            </div>
+                            {currentMapTitle}
+                          </h3>
+                          <button 
+                            onClick={() => setShowMap(false)}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Icon name="x" size={24} className="text-gray-500"/>
+                          </button>
+                        </div>
+                        <div className="flex-1 relative bg-gray-100">
+                          <iframe
+                            title="Map Preview"
+                            width="100%"
+                            height="100%"
+                            frameBorder="0"
+                            src={currentMapUrl}
+                            allowFullScreen
+                            className="w-full h-full"
+                          ></iframe>
+                          <div className="absolute bottom-6 right-6">
+                             <a 
+                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(currentMapTitle)}`}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="bg-black text-yellow-400 px-6 py-3 rounded-full shadow-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-800 hover:scale-105 transition-all"
+                             >
+                               <Icon name="externalLink" size={18}/>
+                               在 Google Maps 開啟
+                             </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TripPlanner />);
+    </script>
+</body>
+</html>
