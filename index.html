@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>瀨戶內海冬季任務指揮中心 (雲端同步版)</title>
+    <title>瀨戶內海冬季任務指揮中心 V5.0</title>
     <!-- React & Tailwind -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Firebase SDK (模組化版本相容腳本) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
@@ -32,10 +33,9 @@
         const { useState, useEffect, useRef } = React;
 
         // ==========================================
-        //  請在這裡貼上您的 Firebase Config
+        //  Firebase 設定 (已預填您的專案 ID)
         // ==========================================
         const firebaseConfig = {
-            // 請取代下方的範例內容
             apiKey: "AIzaSyAv5IijFahAASxqHpoIrrFVcroLV9WExD4",
             authDomain: "takamatsu-trip-2025.firebaseapp.com",
             projectId: "takamatsu-trip-2025",
@@ -43,23 +43,20 @@
             messagingSenderId: "181003622268",
             appId: "1:181003622268:web:51e386ce854cd1ddbfb6f9"
         };
-        // ==========================================
 
-        // 初始化 Firebase (如果有設定的話)
         let db = null;
         if (firebaseConfig.projectId) {
             try {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                console.log("Firebase initialized successfully");
             } catch (e) {
                 console.error("Firebase init failed:", e);
             }
         }
 
-        const Icon = ({ name, size = 24, className = "" }) => {
+        const Icon = ({ name, size = 18, className = "" }) => {
             const iconName = name.charAt(0).toLowerCase() + name.slice(1);
-            return <i data-lucide={iconName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
+            return <i data-lucide={iconName} className={className} style={{ width: size, height: size, display: 'inline-block', verticalAlign: 'middle' }}></i>;
         };
 
         const useLucide = () => {
@@ -68,89 +65,110 @@
             });
         };
 
+        // 餐飲選項組件
+        const DiningOptions = ({ title, options, icon }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            return (
+                <div className="mt-2 mb-2">
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="w-full text-left bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg p-3 flex justify-between items-center transition-colors"
+                    >
+                        <span className="font-bold text-orange-800 text-sm flex items-center gap-2">
+                            <Icon name={icon || "utensils"} size={16}/> {title}
+                        </span>
+                        <Icon name={isOpen ? "chevronUp" : "chevronDown"} size={16} className="text-orange-400"/>
+                    </button>
+                    {isOpen && (
+                        <div className="bg-white border-x border-b border-orange-200 rounded-b-lg p-3 space-y-2 animate-fade-in-up">
+                            {options.map((opt, idx) => (
+                                <div key={idx} className="text-xs text-gray-700 pb-2 border-b border-gray-100 last:border-0 last:pb-0">
+                                    <strong className="text-orange-700 block mb-1">選項 {idx + 1}: {opt.name}</strong>
+                                    <p>{opt.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ShoppingList = ({ items, checkedState, onCheck, title, color }) => (
+            <div className={`rounded-xl p-4 border mt-4 ${color === 'red' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                <h4 className={`font-bold flex items-center gap-2 mb-2 ${color === 'red' ? 'text-red-800' : 'text-blue-800'}`}>
+                    <Icon name="shoppingCart" size={18}/> {title}
+                </h4>
+                <div className="space-y-2">
+                    {items.map((item, idx) => (
+                        <label key={idx} className="flex items-start gap-2 cursor-pointer group">
+                            <input 
+                                type="checkbox" 
+                                checked={checkedState[item.id] || false}
+                                onChange={() => onCheck(item.id)}
+                                className={`mt-1 rounded focus:ring-2 ${color === 'red' ? 'text-red-600 focus:ring-red-500' : 'text-blue-600 focus:ring-blue-500'}`}
+                            />
+                            <span className={`text-sm transition-all ${checkedState[item.id] ? 'text-gray-400 line-through' : 'text-gray-700 group-hover:text-black'}`}>
+                                {item.text}
+                            </span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+        );
+
         const TripPlanner = () => {
             const [activeTab, setActiveTab] = useState(0);
-            
-            // 雲端同步的資料狀態
-            const [notes, setNotes] = useState({ 0: '', 1: '', 2: '', 3: '', 4: '' });
-            const [checkedItems, setCheckedItems] = useState({});
+            const [data, setData] = useState({ notes: {}, checkedItems: {} });
             const [syncStatus, setSyncStatus] = useState(db ? '連線中...' : '本機模式');
-            
             const [showMap, setShowMap] = useState(false);
             const [currentMapUrl, setCurrentMapUrl] = useState('');
             const [currentMapTitle, setCurrentMapTitle] = useState('');
 
             useLucide();
 
-            // 1. 初始化讀取資料 (從 Firebase 或 LocalStorage)
             useEffect(() => {
                 if (db) {
-                    // 監聽 Firebase 變更 (Real-time)
-                    const unsubscribe = db.collection('trips').doc('kagawa2025').onSnapshot((doc) => {
+                    const unsubscribe = db.collection('trips').doc('kagawa2025_v5').onSnapshot((doc) => {
                         if (doc.exists) {
-                            const data = doc.data();
-                            if (data.notes) setNotes(data.notes);
-                            if (data.checkedItems) setCheckedItems(data.checkedItems);
+                            setData(doc.data());
                             setSyncStatus('已同步');
                         } else {
-                            // 如果雲端沒資料，建立預設值
-                            db.collection('trips').doc('kagawa2025').set({
-                                notes: { 0: '', 1: '', 2: '', 3: '', 4: '' },
-                                checkedItems: {}
-                            });
+                            db.collection('trips').doc('kagawa2025_v5').set({ notes: {}, checkedItems: {} });
                         }
-                    }, (error) => {
-                        console.error("Sync error:", error);
-                        setSyncStatus('同步失敗');
-                    });
+                    }, () => setSyncStatus('同步失敗'));
                     return () => unsubscribe();
                 } else {
-                    // Fallback: 讀取 LocalStorage
-                    const savedNotes = localStorage.getItem('trip_notes');
-                    const savedChecks = localStorage.getItem('trip_checks');
-                    if (savedNotes) setNotes(JSON.parse(savedNotes));
-                    if (savedChecks) setCheckedItems(JSON.parse(savedChecks));
+                    const localData = localStorage.getItem('trip_data_v5');
+                    if (localData) setData(JSON.parse(localData));
                 }
             }, []);
 
-            // 2. 處理資料更新並寫入
-            const handleCheck = (id) => {
-                const newChecks = { ...checkedItems, [id]: !checkedItems[id] };
-                setCheckedItems(newChecks);
-                saveData(notes, newChecks);
-            };
-
-            const handleNoteChange = (dayIndex, text) => {
-                const newNotes = { ...notes, [dayIndex]: text };
-                setNotes(newNotes);
-                
-                // 防抖動 (Debounce): 避免打一個字就傳一次雲端
-                if (window.saveTimeout) clearTimeout(window.saveTimeout);
-                window.saveTimeout = setTimeout(() => {
-                    saveData(newNotes, checkedItems);
-                }, 1000);
-            };
-
-            const saveData = (newNotes, newChecks) => {
+            const updateData = (newData) => {
+                setData(newData);
                 if (db) {
                     setSyncStatus('儲存中...');
-                    db.collection('trips').doc('kagawa2025').set({
-                        notes: newNotes,
-                        checkedItems: newChecks
-                    }, { merge: true }).then(() => {
-                        setSyncStatus('已同步');
-                    }).catch(err => {
-                        console.error(err);
-                        setSyncStatus('儲存失敗');
-                    });
+                    db.collection('trips').doc('kagawa2025_v5').set(newData, { merge: true })
+                        .then(() => setSyncStatus('已同步'))
+                        .catch(() => setSyncStatus('儲存失敗'));
                 } else {
-                    // 存到 LocalStorage
-                    localStorage.setItem('trip_notes', JSON.stringify(newNotes));
-                    localStorage.setItem('trip_checks', JSON.stringify(newChecks));
+                    localStorage.setItem('trip_data_v5', JSON.stringify(newData));
                 }
             };
 
-            // Map Helpers
+            const handleCheck = (id) => {
+                const newChecked = { ...data.checkedItems, [id]: !data.checkedItems[id] };
+                updateData({ ...data, checkedItems: newChecked });
+            };
+
+            const handleNoteChange = (dayIndex, text) => {
+                const newNotes = { ...data.notes, [dayIndex]: text };
+                setData(prev => ({ ...prev, notes: newNotes }));
+                if (window.saveTimeout) clearTimeout(window.saveTimeout);
+                window.saveTimeout = setTimeout(() => {
+                    updateData({ ...data, notes: newNotes });
+                }, 1000);
+            };
+
             const getEmbedUrl = (query) => `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
             const openMap = (title, query) => {
                 setCurrentMapTitle(title);
@@ -158,323 +176,247 @@
                 setShowMap(true);
             };
 
-            const kusamaColors = {
-                yellow: 'bg-yellow-400',
-                red: 'bg-red-500',
-                dotPattern: "radial-gradient(#00000020 2px, transparent 2px)",
-            };
-
+            // V5.0 Data Structure
             const itinerary = [
                 {
-                    day: "Day 1",
-                    date: "12/25 (四)",
-                    theme: "聖誕入宿與溫泉",
-                    themeColor: "text-blue-600",
-                    accentColor: "border-blue-500",
-                    bgColor: "bg-blue-50",
-                    highlight: "直奔琴平溫泉，享受飯店設施",
-                    stay: "ことひら温泉 琴參閣",
-                    stayQuery: "ことひら温泉 琴参閣",
+                    day: "Day 1", date: "12/25 (四)", theme: "啟程與溫泉", color: "bg-blue-600",
+                    highlight: "06:20 出發 · 領取優惠券 · 琴平溫泉",
                     details: [
-                        { time: "08:50", icon: "plane", text: "台中機場起飛 (JX300)" },
-                        { time: "12:20", icon: "mapPin", text: "抵達高松機場 (領取優惠券包)", mapQuery: "高松機場" },
-                        { time: "13:00", icon: "bus", text: "搭乘機場巴士（琴平線）直達飯店", mapQuery: "高松機場 to ことひら温泉 琴参閣" },
-                        { time: "15:00", icon: "moon", text: "入住琴參閣，享受展望風呂與日式客房", mapQuery: "ことひら温泉 琴参閣" },
-                        { time: "18:00", icon: "utensils", text: "琴平溫泉街晚餐 (骨付鳥一鶴或飯店懷石)", mapQuery: "骨付鳥 一鶴 琴平店" }
+                        { time: "06:20", icon: "home", text: "家門啟程 (預約計程車) → 台中機場", mapQuery: "433臺中市沙鹿區東海路53-1號" },
+                        { time: "06:50", icon: "ticket", text: "【關鍵】星宇櫃檯領取香川優惠券包" },
+                        { time: "12:20", icon: "plane", text: "抵達高松 (午餐建議: 全家炸雞君/讚岐麵業)", mapQuery: "高松機場" },
+                        { time: "13:00", icon: "bus", text: "機場巴士 (琴平線) 直達飯店", mapQuery: "高松機場 to 琴平巴士總站" },
+                        { time: "15:00", icon: "moon", text: "入住琴參閣，享受展望風呂", mapQuery: "ことひら温泉 琴参閣" },
+                        { type: "dining", title: "晚餐：琴平溫泉街", options: [
+                            {name: "骨付鳥 一鶴", desc: "步行5分。香川必吃，推薦老雞與嫩雞，預算3000日圓。"},
+                            {name: "田中屋 (居酒屋)", desc: "步行8分。表參道口，生魚片與關東煮，預算4000日圓。"},
+                            {name: "琴參閣懷石", desc: "飯店內。需預約，舒適免出門，預算6000+日圓。"}
+                        ]}
                     ],
-                    strategy: "第一天不排滿，利用星宇下午抵達的時間差，直接入住高級溫泉飯店放鬆，調整成度假模式。",
-                    actionItems: [
-                        { id: "d1-1", text: "確認機場巴士（琴平線）時刻表" },
-                        { id: "d1-2", text: "確認琴參閣晚餐是否需要預約" }
+                    shopping: []
+                },
+                {
+                    day: "Day 2", date: "12/26 (五)", theme: "文化與家電防災", color: "bg-amber-600",
+                    highlight: "神椿下午茶 · Rainbow Road 重物採買",
+                    details: [
+                        { time: "10:00", icon: "sun", text: "金刀比羅宮散策 (目標500階)", mapQuery: "金刀比羅宮" },
+                        { type: "dining", title: "午餐：神椿或周邊", options: [
+                            {name: "神椿 (Kamitsubaki)", desc: "500階處。資生堂聖代與漢堡排，氣氛優雅。"},
+                            {name: "虎屋 (Toraya)", desc: "表參道口。400年老宅烏龍麵，氣氛佳。"},
+                            {name: "金刀比羅烏龍麵", desc: "表參道上。醬油烏龍麵名店。"}
+                        ]},
+                        { time: "13:30", icon: "train", text: "琴電移動至高松 (入住 Super Hotel)", mapQuery: "スーパーホテル高松禁煙館" },
+                        { time: "15:30", icon: "shoppingBag", text: "【重點】搭計程車至 Rainbow Road 採買", mapQuery: "Yamada Denki Tecc Land Takamatsu Rainbow" },
+                        { type: "dining", title: "晚餐：高松市區", options: [
+                            {name: "骨付鳥 蘭丸", desc: "瓦町步行10分。排隊名店，除了雞肉也有生魚片。"},
+                            {name: "川福 本店", desc: "Lions通。老牌烏龍麵，適合晚餐。"},
+                            {name: "達摩屋 (拉麵)", desc: "瓦町附近。深夜食堂風格，炒飯好吃。"}
+                        ]}
+                    ],
+                    shoppingTitle: "Rainbow Road 戰利品 (重物)",
+                    shoppingColor: "red",
+                    shopping: [
+                        { id: "s2-1", text: "吸頂燈 (Panasonic/NEC ~6畳, 調光調色, 遙控)" },
+                        { id: "s2-2", text: "防災水 & 非常食 (DCM Home Center)" },
+                        { id: "s2-3", text: "手搖發電收音機/手電筒 (DCM)" },
+                        { id: "s2-4", text: "大型收納用品 (Daiso)" }
                     ]
                 },
                 {
-                    day: "Day 2",
-                    date: "12/26 (五)",
-                    theme: "文化體驗與防災採購",
-                    themeColor: "text-amber-600",
-                    accentColor: "border-amber-500",
-                    bgColor: "bg-amber-50",
-                    highlight: "資生堂神椿下午茶 & 輕裝購物",
-                    stay: "Super Hotel 高松禁煙館",
-                    stayQuery: "スーパーホテル高松禁煙館",
+                    day: "Day 3", date: "12/27 (六)", theme: "小豆島公車遊", color: "bg-green-600",
+                    highlight: "橄欖公園 · 天使之路 (乾潮15:30)",
                     details: [
-                        { time: "10:00", icon: "sun", text: "金刀比羅宮散策 (目標：500階)", mapQuery: "金刀比羅宮" },
-                        { time: "11:30", icon: "coffee", text: "神椿 (Kamitsubaki) 資生堂下午茶/午餐", mapQuery: "資生堂パーラー 神椿" },
-                        { time: "13:30", icon: "bus", text: "搭乘琴電 (Kotoden) 返回高松市區", mapQuery: "琴電琴平駅" },
-                        { time: "15:00", icon: "shoppingBag", text: "飯店寄放行李 → 瓦町/DCM 採買防災用品", mapQuery: "DCM Takamatsu" },
-                        { time: "18:00", icon: "moon", text: "入住 Super Hotel (享受天然溫泉)", mapQuery: "スーパーホテル高松禁煙館" }
+                        { time: "09:00", icon: "ship", text: "高松港搭渡輪 → 土庄港 (60分)", mapQuery: "高松港" },
+                        { time: "10:30", icon: "bus", text: "橄欖巴士 → 橄欖公園 (風車拍照)", mapQuery: "道の駅 小豆島オリーブ公園" },
+                        { type: "dining", title: "午餐：橄欖公園內", options: [
+                            {name: "Sun Olive", desc: "景觀餐廳。橄欖油義大利麵、漢堡排。"},
+                            {name: "Olivaz", desc: "輕食咖啡廳。披薩與柑橘飲品。"},
+                            {name: "小賣店外帶", desc: "熱狗與橄欖霜淇淋，草地野餐。"}
+                        ]},
+                        { time: "14:00", icon: "camera", text: "天使之路 (搭公車至國際飯店站)", mapQuery: "エンジェルロード" },
+                        { time: "17:30", icon: "ship", text: "返回高松港", mapQuery: "高松港" },
+                        { type: "dining", title: "晚餐：高松港/兵庫町", options: [
+                            {name: "寄鳥味鳥", desc: "兵庫町。在地人愛的骨付鳥，香料味重。"},
+                            {name: "海鮮食堂 OKIDO", desc: "批發市場直送，高CP值定食。"},
+                            {name: "德島拉麵 麵王", desc: "高松站前。濃郁豚骨生蛋拉麵。"}
+                        ]}
                     ],
-                    strategy: "不強求爬完 1368 階，改為優雅的下午茶行程。先回飯店放行李再購物，避免提重物移動。",
-                    actionItems: [
-                        { id: "d2-1", text: "列出防災用品採購清單" },
-                        { id: "d2-2", text: "購買 IruCa 交通卡" }
+                    shopping: []
+                },
+                {
+                    day: "Day 4", date: "12/28 (日)", theme: "名園與藥妝", color: "bg-pink-600",
+                    highlight: "栗林公園深度遊 · 瓦町購物馬拉松",
+                    details: [
+                        { time: "10:00", icon: "flower", text: "栗林公園 (和船預約 & 掬月亭抹茶)", mapQuery: "掬月亭" },
+                        { type: "dining", title: "午餐：栗林公園周邊", options: [
+                            {name: "上原屋本店", desc: "公園對面。必吃自助式燙麵(Tebo)體驗。"},
+                            {name: "Garden Cafe 栗林", desc: "園區內讚岐物產館。簡單定食。"},
+                            {name: "松下製麵所", desc: "步行10分。孤獨的美食家風格老店。"}
+                        ]},
+                        { time: "14:30", icon: "shoppingBag", text: "【輕物採買】瓦町 FLAG & 商店街", mapQuery: "瓦町FLAG" },
+                        { type: "dining", title: "晚餐：慶功宴", options: [
+                            {name: "和牛 Ichiie", desc: "瓦町附近。高品質讚岐橄欖牛燒肉。"},
+                            {name: "壽司割烹 魚夏", desc: "瓦町老字號。安靜享受瀨戶內海壽司。"},
+                            {name: "Grill & 洋食 Arigato", desc: "丸龜町。溫馨好吃的日式漢堡排。"}
+                        ]}
+                    ],
+                    shoppingTitle: "瓦町/商店街 戰利品 (輕物)",
+                    shoppingColor: "blue",
+                    shopping: [
+                        { id: "s4-1", text: "3Coins 質感收納 (瓦町FLAG)" },
+                        { id: "s4-2", text: "DHC 營養品 (大國藥妝)" },
+                        { id: "s4-3", text: "美妝保養品 (大國/松本清)" },
+                        { id: "s4-4", text: "唐吉訶德 防災補貨/零食" }
                     ]
                 },
                 {
-                    day: "Day 3",
-                    date: "12/27 (六)",
-                    theme: "小豆島公車漫遊",
-                    themeColor: "text-green-600",
-                    accentColor: "border-green-500",
-                    bgColor: "bg-green-50",
-                    highlight: "魔女宅急便風車 & 天使之路潮汐",
-                    stay: "Super Hotel 高松禁煙館",
-                    stayQuery: "スーパーホテル高松禁煙館",
+                    day: "Day 5", date: "12/29 (一)", theme: "職人早餐歸途", color: "bg-purple-600",
+                    highlight: "傻瓜一代烏龍麵 · 機場最後衝刺",
                     details: [
-                        { time: "09:00", icon: "ship", text: "高松港搭乘渡輪 (使用免費券) → 土庄港", mapQuery: "土庄港" },
-                        { time: "10:30", icon: "bus", text: "轉乘橄欖巴士 → 橄欖公園 (白色風車)", mapQuery: "道の駅 小豆島オリーブ公園" },
-                        { time: "12:30", icon: "utensils", text: "園區內午餐 (橄欖油料理)", mapQuery: "道の駅 小豆島オリーブ公園" },
-                        { time: "15:30", icon: "camera", text: "天使之路 (Angel Road) *配合乾潮時間", mapQuery: "エンジェルロード" },
-                        { time: "17:30", icon: "ship", text: "搭船返回高松，市區晚餐", mapQuery: "高松港" }
+                        { time: "06:00", icon: "utensils", text: "早餐：手打十段 傻瓜一代 (釜奶油烏龍麵)", mapQuery: "手打十段 うどんバカ一代" },
+                        { time: "09:00", icon: "package", text: "打包行李 (確認吸頂燈保護良好)" },
+                        { time: "11:00", icon: "bus", text: "瓦町搭乘機場巴士 (使用回程券)", mapQuery: "瓦町駅" },
+                        { time: "13:20", icon: "plane", text: "星宇 JX301 返台 -> 15:40 抵達台中", mapQuery: "臺中國際機場" },
+                        { time: "16:10", icon: "home", text: "預約車接送返回沙鹿甜蜜的家" }
                     ],
-                    strategy: "因租車滿額改為公車遊。放棄偏遠景點，專注於交通方便的橄欖公園與天使之路，步調更悠閒。",
-                    actionItems: [
-                        { id: "d3-1", text: "下載小豆島橄欖巴士時刻表" },
-                        { id: "d3-2", text: "再次確認 12/27 當日乾潮時間" }
-                    ]
-                },
-                {
-                    day: "Day 4",
-                    date: "12/28 (日)",
-                    theme: "直島南瓜與名園抹茶",
-                    themeColor: "text-red-600",
-                    accentColor: "border-red-500",
-                    bgColor: "bg-red-50",
-                    highlight: "草間彌生南瓜朝聖 & 栗林公園",
-                    stay: "Super Hotel 高松禁煙館",
-                    stayQuery: "スーパーホテル高松禁煙館",
-                    details: [
-                        { time: "09:00", icon: "ship", text: "高松港 → 直島宮浦港 (紅南瓜合影)", mapQuery: "直島宮浦港" },
-                        { time: "10:30", icon: "bus", text: "搭乘場內巴士 → 杜鵑莊 (黃南瓜朝聖)", mapQuery: "つつじ荘" },
-                        { time: "14:20", icon: "ship", text: "搭船返回高松", mapQuery: "高松港" },
-                        { time: "15:30", icon: "bus", text: "計程車直奔栗林公園", mapQuery: "栗林公園" },
-                        { time: "16:00", icon: "coffee", text: "掬月亭抹茶體驗 (趕在 17:30 閉園前)", mapQuery: "掬月亭" }
-                    ],
-                    strategy: "即使週日美術館休館，但「南瓜」是戶外裝置不受影響。下午接栗林公園，利用免費入園票。",
-                    actionItems: [
-                        { id: "d4-1", text: "準備直島渡輪船費 (不含在免費券內)" },
-                        { id: "d4-2", text: "確認栗林公園掬月亭最後點餐時間" }
-                    ]
-                },
-                {
-                    day: "Day 5",
-                    date: "12/29 (一)",
-                    theme: "職人烏龍麵與歸途",
-                    themeColor: "text-purple-600",
-                    accentColor: "border-purple-500",
-                    bgColor: "bg-purple-50",
-                    highlight: "清晨排隊名店 & 機場最後衝刺",
-                    stay: "溫暖的家",
-                    details: [
-                        { time: "06:00", icon: "utensils", text: "步行至「手打十段 傻瓜一代」吃早餐", mapQuery: "手打十段 うどんバカ一代" },
-                        { time: "09:00", icon: "shoppingBag", text: "瓦町商店街最後補貨 / 整理行李", mapQuery: "高松丸亀町商店街" },
-                        { time: "11:00", icon: "bus", text: "搭乘機場巴士前往高松機場", mapQuery: "高松機場" },
-                        { time: "13:20", icon: "plane", text: "星宇航空 JX301 起飛返台" }
-                    ],
-                    strategy: "利用早晨時間體驗在地「朝烏龍」文化。預留充足時間前往機場，避免年末人潮延誤。",
-                    actionItems: [
-                        { id: "d5-1", text: "Day 1 抵達時先確認烏龍麵店 29 號是否有開" },
-                        { id: "d5-2", text: "確認機場巴士回程票券是否在身上" }
-                    ]
+                    shopping: []
                 }
             ];
 
             return (
-                <div className="max-w-4xl mx-auto p-4 md:p-6 min-h-screen font-sans relative pb-20" 
-                     style={{
-                       backgroundColor: '#fbbf24',
-                       backgroundImage: kusamaColors.dotPattern,
-                       backgroundSize: '24px 24px'
-                     }}>
-                  
-                  {/* Header Card */}
-                  <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 mb-6 border-4 border-black relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-red-500 rounded-full -mr-10 -mt-10 opacity-20"></div>
-                    
-                    <h1 className="text-2xl md:text-4xl font-black text-gray-900 mb-2 tracking-tight">
-                      🚢 瀨戶內海冬季任務
-                    </h1>
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-sm font-bold text-gray-600">
-                            <span>2025/12/25 - 12/29</span>
+                <div className="max-w-md mx-auto bg-gray-50 min-h-screen pb-24 font-sans text-gray-800">
+                    {/* Header */}
+                    <div className="bg-white p-5 shadow-sm sticky top-0 z-20">
+                        <div className="flex justify-between items-center mb-1">
+                            <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                                <Icon name="map" className="text-blue-600"/> 瀨戶內海戰情室
+                            </h1>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${syncStatus === '已同步' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
+                                {syncStatus}
+                            </span>
                         </div>
-                        {/* 顯示同步狀態 */}
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${syncStatus === '已同步' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {db ? `☁️ ${syncStatus}` : '💾 本機模式 (無同步)'}
-                        </div>
+                        <p className="text-xs text-gray-500 font-medium">V5.0 最終執行版 · 2025/12/25 - 29</p>
                     </div>
-                  </div>
 
-                  {/* Tabs */}
-                  <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-hide px-1">
-                    {itinerary.map((item, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setActiveTab(index)}
-                        className={`flex-shrink-0 px-4 py-3 rounded-2xl font-bold transition-all duration-300 border-b-4 ${
-                          activeTab === index 
-                            ? 'bg-black text-yellow-400 border-black transform -translate-y-1 shadow-lg' 
-                            : 'bg-white text-gray-800 border-gray-300'
-                        }`}
-                      >
-                        <div className="text-xs opacity-70 mb-1">{item.date}</div>
-                        <div className="text-lg">{item.day}</div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Main Content Area */}
-                  <div className="grid md:grid-cols-3 gap-6">
-                    
-                    {/* Left Column: Itinerary Details */}
-                    <div className="md:col-span-2 space-y-6">
-                      <div className={`bg-white rounded-3xl shadow-xl p-6 border-l-8 ${itinerary[activeTab].accentColor}`}>
-                        <div className="flex justify-between items-start mb-4">
-                          <h2 className={`text-xl font-black ${itinerary[activeTab].themeColor}`}>{itinerary[activeTab].theme}</h2>
-                          {activeTab === 3 && <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">南瓜重點日</div>}
+                    <div className="p-4">
+                        {/* Stats */}
+                        <div className="bg-white rounded-2xl shadow-sm p-4 mb-5 border border-gray-100">
+                            <h2 className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Trip Focus</h2>
+                            <div className="flex gap-1 h-2 rounded-full overflow-hidden mb-2">
+                                <div className="bg-blue-500 w-[40%]"></div>
+                                <div className="bg-amber-500 w-[30%]"></div>
+                                <div className="bg-green-500 w-[30%]"></div>
+                            </div>
+                            <div className="flex justify-between text-xs font-bold">
+                                <span className="text-blue-600">觀光 40%</span>
+                                <span className="text-amber-600">購物 30%</span>
+                                <span className="text-green-600">美食 30%</span>
+                            </div>
                         </div>
-                        
-                        <p className="bg-gray-100 px-3 py-2 rounded-lg text-gray-700 font-bold mb-6 text-sm inline-block">
-                          ✨ {itinerary[activeTab].highlight}
-                        </p>
-                        
-                        <div className="space-y-3">
-                          {itinerary[activeTab].details.map((detail, idx) => (
-                            <div key={idx} className="flex items-center gap-3 group bg-white hover:bg-gray-50 p-2 rounded-xl border border-transparent hover:border-gray-200">
-                              <div className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-black text-white`}>
-                                <Icon name={detail.icon} size={16} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-bold text-gray-900 text-sm">{detail.time}</div>
-                                <div className="text-gray-600 font-medium text-sm">{detail.text}</div>
-                              </div>
-                              {detail.mapQuery && (
+
+                        {/* Tabs */}
+                        <div className="flex overflow-x-auto gap-2 mb-5 pb-1 scrollbar-hide">
+                            {itinerary.map((item, idx) => (
                                 <button 
-                                  onClick={() => openMap(detail.text, detail.mapQuery)}
-                                  className="flex-shrink-0 p-2 text-gray-400 hover:text-red-500"
+                                    key={idx}
+                                    onClick={() => setActiveTab(idx)}
+                                    className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border-b-4 ${activeTab === idx ? `${item.color} text-white border-black/20 shadow-lg transform -translate-y-0.5` : 'bg-white text-gray-500 border-transparent hover:bg-gray-50'}`}
                                 >
-                                  <Icon name="map" size={18} />
+                                    {item.day}
                                 </button>
-                              )}
-                            </div>
-                          ))}
+                            ))}
                         </div>
-                        
-                        {/* Accommodation */}
-                        <div className="mt-6 pt-4 border-t border-dashed border-gray-200">
-                            <div className="flex justify-between items-center bg-indigo-50 p-3 rounded-xl">
-                                <div className="flex items-center gap-2">
-                                    <Icon name="moon" size={16} className="text-indigo-500"/>
-                                    <span className="font-bold text-indigo-900 text-sm">{itinerary[activeTab].stay}</span>
+
+                        {/* Content Card */}
+                        <div className="bg-white rounded-3xl shadow-lg p-5 border border-gray-100 animate-fade-in-up min-h-[50vh]">
+                            <div className="mb-6">
+                                <h3 className={`text-2xl font-black ${itinerary[activeTab].color.replace('bg-', 'text-')} mb-1`}>{itinerary[activeTab].theme}</h3>
+                                <p className="text-sm font-medium text-gray-400">{itinerary[activeTab].date}</p>
+                                <div className="mt-3 bg-gray-50 p-3 rounded-xl text-xs font-bold text-gray-600 border border-gray-100">
+                                    ✨ {itinerary[activeTab].highlight}
                                 </div>
-                                {itinerary[activeTab].stayQuery && (
-                                  <button onClick={() => openMap(itinerary[activeTab].stay, itinerary[activeTab].stayQuery)}>
-                                    <Icon name="map" size={16} className="text-indigo-400"/>
-                                  </button>
-                                )}
+                            </div>
+
+                            {/* Timeline */}
+                            <div className="space-y-6 relative pl-3">
+                                <div className="absolute left-[15px] top-3 bottom-3 w-0.5 bg-gray-100"></div>
+                                {itinerary[activeTab].details.map((detail, i) => (
+                                    <div key={i} className="relative">
+                                        {detail.type === 'dining' ? (
+                                            <div className="pl-10">
+                                                <DiningOptions title={detail.title} options={detail.options} />
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-4 items-start group">
+                                                <div className={`z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${activeTab === 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'} shadow-sm border-2 border-white`}>
+                                                    <Icon name={detail.icon} size={14}/>
+                                                </div>
+                                                <div className="flex-1 pt-1">
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{detail.time}</span>
+                                                        {detail.mapQuery && (
+                                                            <button onClick={() => openMap(detail.text, detail.mapQuery)} className="text-blue-400 hover:text-blue-600">
+                                                                <Icon name="mapPin" size={16}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{detail.text}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Shopping List (If any) */}
+                            {itinerary[activeTab].shopping && itinerary[activeTab].shopping.length > 0 && (
+                                <ShoppingList 
+                                    title={itinerary[activeTab].shoppingTitle || "今日購物清單"}
+                                    color={itinerary[activeTab].shoppingColor}
+                                    items={itinerary[activeTab].shopping} 
+                                    checkedState={data.checkedItems}
+                                    onCheck={handleCheck}
+                                />
+                            )}
+
+                            {/* Notes */}
+                            <div className="mt-8 pt-6 border-t border-dashed border-gray-200">
+                                <label className="text-xs font-bold text-gray-400 mb-2 flex items-center gap-1">
+                                    <Icon name="edit3" size={12}/> 
+                                    {itinerary[activeTab].day} 隨手記
+                                </label>
+                                <textarea 
+                                    className="w-full bg-yellow-50/50 rounded-xl p-4 text-sm text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none border border-yellow-100 resize-none"
+                                    rows="4"
+                                    placeholder="紀錄花費、心情或備忘..."
+                                    value={data.notes[activeTab] || ''}
+                                    onChange={(e) => handleNoteChange(activeTab, e.target.value)}
+                                />
                             </div>
                         </div>
-                      </div>
-
-                      {/* Strategy Box */}
-                      <div className="bg-black text-white rounded-3xl p-5 shadow-xl relative overflow-hidden">
-                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-yellow-400 rounded-full blur-lg opacity-30"></div>
-                        <h3 className="font-bold text-yellow-400 mb-2 flex items-center gap-2 text-sm">
-                          <Icon name="info" size={16}/> 策略思考
-                        </h3>
-                        <p className="text-gray-300 text-sm leading-relaxed font-medium">
-                          {itinerary[activeTab].strategy}
-                        </p>
-                      </div>
                     </div>
 
-                    {/* Right Column: Interactive Tools */}
-                    <div className="space-y-6">
-                      
-                      {/* Action Items Checklist */}
-                      <div className="bg-white rounded-3xl shadow-xl p-6 border-2 border-gray-100">
-                        <h3 className="font-black text-gray-900 mb-4 flex items-center gap-2 text-lg border-b-2 border-yellow-200 pb-2 inline-block">
-                          <Icon name="checkSquare" size={20} className="text-green-500"/>
-                          任務清單
-                        </h3>
-                        <div className="space-y-3">
-                          {itinerary[activeTab].actionItems.map((item) => (
-                            <label key={item.id} className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-yellow-50 rounded-xl transition-all border border-gray-100 hover:border-yellow-200">
-                              <input 
-                                type="checkbox" 
-                                checked={checkedItems[item.id] || false}
-                                onChange={() => handleCheck(item.id)}
-                                className="mt-1 w-4 h-4 rounded text-black focus:ring-black border-gray-300"
-                              />
-                              <span className={`text-sm font-medium ${checkedItems[item.id] ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                                {item.text}
-                              </span>
-                            </label>
-                          ))}
+                    {/* Map Modal */}
+                    {showMap && (
+                        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl w-full max-w-lg h-[70vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up">
+                                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                                    <h3 className="font-bold truncate pr-4 text-gray-800 flex items-center gap-2">
+                                        <Icon name="mapPin" className="text-red-500" size={16}/>
+                                        {currentMapTitle}
+                                    </h3>
+                                    <button onClick={() => setShowMap(false)} className="p-1 hover:bg-gray-200 rounded-full"><Icon name="x" size={20}/></button>
+                                </div>
+                                <iframe src={currentMapUrl} className="flex-1 w-full bg-gray-100" frameBorder="0"></iframe>
+                                <div className="p-4 bg-white border-t text-center">
+                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(currentMapTitle)}`} target="_blank" className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-full font-bold text-sm shadow-lg hover:bg-blue-700 transition-all">
+                                        <Icon name="externalLink" size={16}/>
+                                        在 Google Maps 開啟
+                                    </a>
+                                </div>
+                            </div>
                         </div>
-                      </div>
-
-                      {/* Discussion Notes */}
-                      <div className="bg-yellow-300 rounded-3xl shadow-xl p-1 pb-3 transform rotate-1 hover:rotate-0 transition-transform duration-300">
-                         <div className="bg-white rounded-[20px] p-5 h-64 flex flex-col">
-                          <h3 className="font-black text-gray-900 mb-3 flex items-center gap-2">
-                            <Icon name="edit3" size={18} className="text-black"/>
-                            討論筆記
-                          </h3>
-                          <textarea 
-                            className="flex-1 w-full p-4 bg-yellow-50 rounded-xl text-gray-800 text-sm font-medium focus:ring-2 focus:ring-yellow-400 outline-none resize-none border-2 border-transparent focus:border-yellow-200 placeholder-gray-400"
-                            placeholder={`寫下關於 ${itinerary[activeTab].day} 的想法...`}
-                            value={notes[activeTab]}
-                            onChange={(e) => handleNoteChange(activeTab, e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Map Modal */}
-                  {showMap && (
-                    <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden animate-fade-in-up border-4 border-yellow-400">
-                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                          <h3 className="font-bold text-gray-900 flex items-center gap-2 text-lg truncate pr-4">
-                            <Icon name="mapPin" size={20} className="text-red-500" />
-                            {currentMapTitle}
-                          </h3>
-                          <button 
-                            onClick={() => setShowMap(false)}
-                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                          >
-                            <Icon name="x" size={24} className="text-gray-500"/>
-                          </button>
-                        </div>
-                        <div className="flex-1 relative bg-gray-100">
-                          <iframe
-                            title="Map Preview"
-                            width="100%"
-                            height="100%"
-                            frameBorder="0"
-                            src={currentMapUrl}
-                            allowFullScreen
-                            className="w-full h-full"
-                          ></iframe>
-                          <div className="absolute bottom-6 right-6">
-                             <a 
-                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(currentMapTitle)}`}
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               className="bg-black text-yellow-400 px-6 py-3 rounded-full shadow-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-800 hover:scale-105 transition-all"
-                             >
-                               <Icon name="externalLink" size={18}/>
-                               在 Google Maps 開啟
-                             </a>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
             );
         };
