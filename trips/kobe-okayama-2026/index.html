@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>2026 神戶岡山之旅｜資料收集小工具</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          boxShadow: {
+            soft: '0 18px 50px rgba(15, 23, 42, 0.12)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    html, body { height: 100%; }
+    body {
+      font-family: "Noto Sans TC", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 28%),
+        radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.12), transparent 24%),
+        linear-gradient(180deg, #fffdfa 0%, #f8fafc 100%);
+      color: #0f172a;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useEffect, useMemo, useState } = React;
+
+    const STORAGE_KEY = 'kobeOkayama2026Items';
+    const CATEGORY_OPTIONS = ['景點', '美食', '交通', '信用卡', '機票', '住宿', '影片', '文章', '小遊戲靈感', '其他'];
+    const REGION_OPTIONS = ['神戶', '岡山', '姬路', '其他'];
+    const PRIORITY_OPTIONS = ['必去', '想去', '備案'];
+    const STATUS_OPTIONS = ['未確認', '已確認', '已排入行程'];
+
+    const DEFAULT_FORM = {
+      title: '',
+      category: '景點',
+      region: '神戶',
+      link: '',
+      note: '',
+      priority: '想去',
+      status: '未確認'
+    };
+
+    const uid = () => {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    };
+
+    const safeJsonParse = (value, fallback) => {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed ?? fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
+    const normalizeItem = (item) => ({
+      id: item?.id || uid(),
+      title: String(item?.title || '').trim(),
+      category: CATEGORY_OPTIONS.includes(item?.category) ? item.category : DEFAULT_FORM.category,
+      region: REGION_OPTIONS.includes(item?.region) ? item.region : DEFAULT_FORM.region,
+      link: String(item?.link || '').trim(),
+      note: String(item?.note || '').trim(),
+      priority: PRIORITY_OPTIONS.includes(item?.priority) ? item.priority : DEFAULT_FORM.priority,
+      status: STATUS_OPTIONS.includes(item?.status) ? item.status : DEFAULT_FORM.status,
+      createdAt: item?.createdAt || new Date().toISOString(),
+      updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
+    });
+
+    const itemStore = {
+      load() {
+        if (typeof window === 'undefined') return [];
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = safeJsonParse(raw, []);
+        return Array.isArray(parsed) ? parsed.map(normalizeItem).filter((item) => item.title) : [];
+      },
+      save(items) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      },
+      add(data) {
+        const next = normalizeItem({ ...data, id: uid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        const items = [next, ...this.load()];
+        this.save(items);
+        return next;
+      },
+      update(id, data) {
+        const now = new Date().toISOString();
+        const items = this.load().map((item) => item.id === id ? normalizeItem({ ...item, ...data, id, createdAt: item.createdAt, updatedAt: now }) : item);
+        this.save(items);
+        return items.find((item) => item.id === id);
+      },
+      remove(id) {
+        const items = this.load().filter((item) => item.id !== id);
+        this.save(items);
+        return items;
+      }
+    };
+
+    const formatDateTime = (value) => {
+      if (!value) return '-';
+      return new Intl.DateTimeFormat('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(value));
+    };
+
+    const formatShort = (value) => {
+      if (!value) return '尚無備註';
+      return value.length > 60 ? `${value.slice(0, 60)}…` : value;
+    };
+
+    const categoryColors = {
+      景點: 'bg-sky-100 text-sky-800',
+      美食: 'bg-rose-100 text-rose-800',
+      交通: 'bg-emerald-100 text-emerald-800',
+      信用卡: 'bg-amber-100 text-amber-800',
+      機票: 'bg-violet-100 text-violet-800',
+      住宿: 'bg-cyan-100 text-cyan-800',
+      影片: 'bg-fuchsia-100 text-fuchsia-800',
+      文章: 'bg-indigo-100 text-indigo-800',
+      小遊戲靈感: 'bg-orange-100 text-orange-800',
+      其他: 'bg-slate-100 text-slate-700'
+    };
+
+    const priorityColors = {
+      必去: 'bg-rose-600 text-white',
+      想去: 'bg-amber-500 text-white',
+      備案: 'bg-slate-200 text-slate-700'
+    };
+
+    const statusColors = {
+      未確認: 'bg-slate-100 text-slate-700',
+      已確認: 'bg-blue-100 text-blue-800',
+      已排入行程: 'bg-emerald-100 text-emerald-800'
+    };
+
+    function App() {
+      const [items, setItems] = useState([]);
+      const [form, setForm] = useState(DEFAULT_FORM);
+      const [editingId, setEditingId] = useState(null);
+      const [filterCategory, setFilterCategory] = useState('全部');
+      const [filterRegion, setFilterRegion] = useState('全部');
+      const [filterPriority, setFilterPriority] = useState('全部');
+      const [message, setMessage] = useState('');
+
+      useEffect(() => {
+        setItems(itemStore.load());
+      }, []);
+
+      useEffect(() => {
+        if (!message) return;
+        const timer = window.setTimeout(() => setMessage(''), 2500);
+        return () => window.clearTimeout(timer);
+      }, [message]);
+
+      const filteredItems = useMemo(() => {
+        return items
+          .filter((item) => filterCategory === '全部' || item.category === filterCategory)
+          .filter((item) => filterRegion === '全部' || item.region === filterRegion)
+          .filter((item) => filterPriority === '全部' || item.priority === filterPriority)
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }, [items, filterCategory, filterRegion, filterPriority]);
+
+      const stats = useMemo(() => {
+        const countsByCategory = CATEGORY_OPTIONS.reduce((acc, category) => {
+          acc[category] = items.filter((item) => item.category === category).length;
+          return acc;
+        }, {});
+        return {
+          total: items.length,
+          countsByCategory,
+          recent: [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3)
+        };
+      }, [items]);
+
+      const resetForm = () => {
+        setForm(DEFAULT_FORM);
+        setEditingId(null);
+      };
+
+      const handleSubmit = (event) => {
+        event.preventDefault();
+        const title = form.title.trim();
+        if (!title) {
+          setMessage('標題必填，請先輸入名稱。');
+          return;
+        }
+
+        const payload = {
+          title,
+          category: form.category,
+          region: form.region,
+          link: form.link.trim(),
+          note: form.note.trim(),
+          priority: form.priority,
+          status: form.status
+        };
+
+        if (editingId) {
+          const updated = itemStore.update(editingId, payload);
+          setItems(itemStore.load());
+          setMessage(updated ? '已更新資料。' : '更新失敗，請再試一次。');
+        } else {
+          itemStore.add(payload);
+          setItems(itemStore.load());
+          setMessage('已新增一筆資料。');
+        }
+
+        resetForm();
+      };
+
+      const startEdit = (item) => {
+        setEditingId(item.id);
+        setForm({
+          title: item.title,
+          category: item.category,
+          region: item.region,
+          link: item.link,
+          note: item.note,
+          priority: item.priority,
+          status: item.status
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleDelete = (item) => {
+        const ok = window.confirm(`確定刪除「${item.title}」嗎？`);
+        if (!ok) return;
+        itemStore.remove(item.id);
+        setItems(itemStore.load());
+        setMessage('已刪除資料。');
+        if (editingId === item.id) resetForm();
+      };
+
+      const clearFilters = () => {
+        setFilterCategory('全部');
+        setFilterRegion('全部');
+        setFilterPriority('全部');
+      };
+
+      const Field = ({ label, children, hint }) => (
+        <label className="block space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-bold text-slate-700">{label}</span>
+            {hint && <span className="text-xs text-slate-400">{hint}</span>}
+          </div>
+          {children}
+        </label>
+      );
+
+      const Select = (props) => (
+        <select
+          {...props}
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-amber-100"
+        />
+      );
+
+      const Input = (props) => (
+        <input
+          {...props}
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-amber-100"
+        />
+      );
+
+      const Textarea = (props) => (
+        <textarea
+          {...props}
+          className="w-full min-h-[110px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-amber-100"
+        />
+      );
+
+      return (
+        <div className="min-h-screen">
+          <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+            <header className="glass rounded-[28px] px-5 py-6 shadow-soft sm:px-8">
+              <div className="flex flex-col gap-4">
+                <div className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+                  2026 神戶岡山之旅
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">資料收集小工具</h1>
+                  <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
+                    出發前先把景點、美食、交通、信用卡、機票、住宿、影片、文章與靈感集中整理，手機上也能快速新增與查看。
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">旅行期間</div>
+                    <div className="mt-1 text-sm font-semibold">2026 年 8 月中旬，週日出發，週六返回</div>
+                  </div>
+                  <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">資料總數</div>
+                    <div className="mt-1 text-2xl font-black text-slate-900">{stats.total}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">最近新增</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{stats.recent[0]?.title || '尚無資料'}</div>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+              <section className="space-y-5">
+                <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-950">Dashboard</h2>
+                      <p className="mt-1 text-sm text-slate-500">總覽、分類數量與最近新增資料。</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                      清除篩選
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-slate-900 px-4 py-4 text-white">
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">總資料筆數</div>
+                      <div className="mt-2 text-3xl font-black">{stats.total}</div>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50 px-4 py-4 ring-1 ring-amber-100">
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">最近新增</div>
+                      <div className="mt-2 text-sm font-semibold text-slate-900">
+                        {stats.recent[0]?.title || '先新增一筆資料'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-slate-200">
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">分類種類</div>
+                      <div className="mt-2 text-3xl font-black text-slate-900">{CATEGORY_OPTIONS.length}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setFilterCategory(category)}
+                        className={`rounded-2xl border px-4 py-4 text-left transition ${
+                          filterCategory === category ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${categoryColors[category] || 'bg-slate-100 text-slate-700'}`}>{category}</span>
+                          <span className="text-2xl font-black">{stats.countsByCategory[category]}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">最近新增資料</h3>
+                      <span className="text-xs font-semibold text-slate-400">最新 3 筆</span>
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {stats.recent.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+                          目前還沒有資料，先用下方表單新增一筆吧。
+                        </div>
+                      ) : (
+                        stats.recent.map((item) => (
+                          <div key={item.id} className="rounded-2xl bg-slate-50 px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-black text-slate-900">{item.title}</span>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${categoryColors[item.category] || 'bg-slate-100 text-slate-700'}`}>{item.category}</span>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${statusColors[item.status] || 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">{formatDateTime(item.createdAt)}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-950">資料列表</h2>
+                      <p className="mt-1 text-sm text-slate-500">依建立時間由新到舊排序，顯示卡片式內容。</p>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-500">
+                      目前顯示 {filteredItems.length} / {items.length} 筆
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <Select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+                      <option value="全部">全部分類</option>
+                      {CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </Select>
+                    <Select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)}>
+                      <option value="全部">全部地區</option>
+                      {REGION_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </Select>
+                    <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+                      <option value="全部">全部優先度</option>
+                      {PRIORITY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </Select>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    {filteredItems.length === 0 ? (
+                      <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
+                        目前沒有符合條件的資料。試著調整篩選，或先新增一筆。
+                      </div>
+                    ) : filteredItems.map((item) => (
+                      <article key={item.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-black text-slate-950">{item.title}</h3>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${categoryColors[item.category] || 'bg-slate-100 text-slate-700'}`}>{item.category}</span>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${statusColors[item.status] || 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1">地區：{item.region}</span>
+                              <span className={`rounded-full px-2.5 py-1 ${priorityColors[item.priority] || 'bg-slate-200 text-slate-700'}`}>優先度：{item.priority}</span>
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1">建立：{formatDateTime(item.createdAt)}</span>
+                            </div>
+                            <p className="text-sm leading-6 text-slate-600">{formatShort(item.note)}</p>
+                            {item.link ? (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 text-sm font-bold text-sky-700 underline decoration-sky-200 underline-offset-4"
+                              >
+                                開啟連結
+                              </a>
+                            ) : (
+                              <span className="text-sm text-slate-400">未提供連結</span>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(item)}
+                              className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
+                            >
+                              編輯
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item)}
+                              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              刪除
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-5">
+                <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-950">{editingId ? '編輯資料' : '新增資料'}</h2>
+                      <p className="mt-1 text-sm text-slate-500">手機上好填寫，標題必填，其它欄位都有預設值。</p>
+                    </div>
+                    {editingId && (
+                      <button
+                        type="button"
+                        onClick={resetForm}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        取消編輯
+                      </button>
+                    )}
+                  </div>
+
+                  {message && (
+                    <div className="mt-4 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+                      {message}
+                    </div>
+                  )}
+
+                  <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+                    <Field label="標題" hint="必填">
+                      <Input
+                        required
+                        value={form.title}
+                        placeholder="例如：神戶牛晚餐候選 / 姬路城周邊景點"
+                        onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                      />
+                    </Field>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="分類">
+                        <Select value={form.category} onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}>
+                          {CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label="地區">
+                        <Select value={form.region} onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value }))}>
+                          {REGION_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </Select>
+                      </Field>
+                    </div>
+
+                    <Field label="連結" hint="可留空">
+                      <Input
+                        type="url"
+                        value={form.link}
+                        placeholder="https://..."
+                        onChange={(e) => setForm((prev) => ({ ...prev, link: e.target.value }))}
+                      />
+                    </Field>
+
+                    <Field label="備註" hint="可留空">
+                      <Textarea
+                        value={form.note}
+                        placeholder="補充原因、地址、營業時間、注意事項、討論紀錄..."
+                        onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
+                      />
+                    </Field>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="優先度">
+                        <Select value={form.priority} onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}>
+                          {PRIORITY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label="狀態">
+                        <Select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
+                          {STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </Select>
+                      </Field>
+                    </div>
+
+                    <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                      <button
+                        type="submit"
+                        className="inline-flex flex-1 items-center justify-center rounded-2xl bg-amber-400 px-5 py-3.5 text-base font-black text-slate-950 shadow-sm transition hover:bg-amber-300"
+                      >
+                        {editingId ? '更新這筆資料' : '新增到清單'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetForm}
+                        className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-base font-bold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        清空表單
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
+                  <h2 className="text-xl font-black text-slate-950">快速說明</h2>
+                  <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+                    <li>1. 標題必填，其它欄位都可以先用預設值快速建立。</li>
+                    <li>2. 資料會存在 `localStorage`，重新整理後仍保留。</li>
+                    <li>3. 你之後若要接 Firebase，可以直接沿用這個 `itemStore` 封裝。</li>
+                    <li>4. 點「編輯」可以把資料帶回表單，刪除前會先跳出確認視窗。</li>
+                  </ul>
+                </div>
+              </section>
+            </main>
+          </div>
+
+          <div className="safe-bottom fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 text-xs font-bold text-slate-500">
+              <span>手機優先</span>
+              <span>{items.length} 筆資料</span>
+              <span>localStorage</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
