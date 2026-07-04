@@ -91,12 +91,60 @@
       }
     ];
 
-    const FEEDBACK_QUESTIONS = [
-      '這種每天 3 分鐘的小任務，你會覺得有趣還是麻煩？',
-      '你比較喜歡任務卡、抽卡、故事卡，還是旅後明信片？',
-      '旅行中你願意留一句話嗎？',
-      '你覺得這跟 Notion / 去趣有沒有重疊？',
-      '如果只能保留一個功能，你會選哪一個？'
+    const FEEDBACK_PROMPTS = [
+      {
+        key: 'task',
+        title: '今日任務卡',
+        question: '這種每天 3 分鐘的小任務，你覺得？',
+        options: [
+          '有趣，旅行中會想打開',
+          '還可以，但不要太多',
+          '有點麻煩'
+        ]
+      },
+      {
+        key: 'draw',
+        title: '抽卡區',
+        question: '抽卡這種形式你喜歡嗎？',
+        options: [
+          '喜歡，很輕鬆',
+          '普通，可以有但不是主功能',
+          '不太需要'
+        ]
+      },
+      {
+        key: 'story',
+        title: '景點故事卡',
+        question: '景點故事卡對你有幫助嗎？',
+        options: [
+          '有，會讓景點更有感覺',
+          '還好，看文字長短',
+          '不需要，去趣或 Google 就好'
+        ]
+      },
+      {
+        key: 'postTrip',
+        title: '旅後 AI 明信片區',
+        question: '旅後成果你最期待哪個？',
+        options: [
+          'AI 插畫明信片',
+          '短動畫分鏡',
+          '互動回憶頁',
+          '都還好'
+        ]
+      },
+      {
+        key: 'keepOne',
+        title: '最後收斂問題',
+        question: '如果只能保留一個功能，你會選哪個？',
+        options: [
+          '每日任務卡',
+          '抽卡',
+          '景點故事卡',
+          '旅後明信片',
+          '都不太需要'
+        ]
+      }
     ];
 
     const POST_TRIP_PREVIEWS = [
@@ -120,8 +168,38 @@
       const [taskChecks, setTaskChecks] = useState([false, false, false]);
       const [currentCardIndex, setCurrentCardIndex] = useState(0);
       const [storyOpen, setStoryOpen] = useState('姬路城｜白鷺城攻防觀察');
+      const [feedback, setFeedback] = useState({
+        task: '',
+        draw: '',
+        story: '',
+        postTrip: '',
+        keepOne: '',
+        note: ''
+      });
+      const [copyStatus, setCopyStatus] = useState('');
+      const [showFallback, setShowFallback] = useState(false);
 
       const currentCard = useMemo(() => INSPIRATION_CARDS[currentCardIndex], [currentCardIndex]);
+
+      const feedbackSummary = useMemo(() => {
+        const lines = [
+          '【神戶岡山旅途策展 Demo 回饋】',
+          '',
+          `1. 每日任務卡：${feedback.task || '尚未選擇'}`,
+          `2. 抽卡：${feedback.draw || '尚未選擇'}`,
+          `3. 景點故事卡：${feedback.story || '尚未選擇'}`,
+          `4. 旅後成果：${feedback.postTrip || '尚未選擇'}`,
+          `5. 如果只能保留一個功能：${feedback.keepOne || '尚未選擇'}`
+        ];
+
+        if (feedback.note.trim()) {
+          lines.push('', '補充意見：', feedback.note.trim());
+        } else {
+          lines.push('', '補充意見：');
+        }
+
+        return lines.join('\n');
+      }, [feedback]);
 
       const toggleTask = (index) => {
         setTaskChecks((prev) => prev.map((checked, idx) => idx === index ? !checked : checked));
@@ -135,6 +213,18 @@
           }
         }
         setCurrentCardIndex(nextIndex);
+      };
+
+      const copyFeedback = async () => {
+        try {
+          await navigator.clipboard.writeText(feedbackSummary);
+          setShowFallback(false);
+          setCopyStatus('已複製完成，可以直接貼到 LINE。');
+        } catch (error) {
+          setShowFallback(true);
+          setCopyStatus('自動複製失敗，請使用下方文字手動複製。');
+        }
+        window.setTimeout(() => setCopyStatus(''), 3000);
       };
 
       return (
@@ -180,6 +270,24 @@
                     </div>
                     <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
                       Day 3
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">這種每天 3 分鐘的小任務，你覺得？</div>
+                    <div className="mt-3 space-y-2">
+                      {FEEDBACK_PROMPTS[0].options.map((option) => (
+                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                          <input
+                            type="radio"
+                            name="feedback-task"
+                            checked={feedback.task === option}
+                            onChange={() => setFeedback((prev) => ({ ...prev, task: option }))}
+                            className="mt-1 h-4 w-4 border-slate-300 text-amber-500 focus:ring-amber-300"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
 
@@ -236,6 +344,24 @@
                       每次按下按鈕，卡片內容會切換。這個 demo 只想讓人感覺到「旅途中有一個可以被輕鬆打開的小驚喜」。
                     </p>
                   </div>
+
+                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">抽卡這種形式你喜歡嗎？</div>
+                    <div className="mt-3 space-y-2">
+                      {FEEDBACK_PROMPTS[1].options.map((option) => (
+                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                          <input
+                            type="radio"
+                            name="feedback-draw"
+                            checked={feedback.draw === option}
+                            onChange={() => setFeedback((prev) => ({ ...prev, draw: option }))}
+                            className="mt-1 h-4 w-4 border-slate-300 text-sky-500 focus:ring-sky-300"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -276,6 +402,24 @@
                       );
                     })}
                   </div>
+
+                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">景點故事卡對你有幫助嗎？</div>
+                    <div className="mt-3 space-y-2">
+                      {FEEDBACK_PROMPTS[2].options.map((option) => (
+                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                          <input
+                            type="radio"
+                            name="feedback-story"
+                            checked={feedback.story === option}
+                            onChange={() => setFeedback((prev) => ({ ...prev, story: option }))}
+                            className="mt-1 h-4 w-4 border-slate-300 text-fuchsia-500 focus:ring-fuchsia-300"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
@@ -302,20 +446,112 @@
                       </div>
                     ))}
                   </div>
+
+                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">旅後成果你最期待哪個？</div>
+                    <div className="mt-3 space-y-2">
+                      {FEEDBACK_PROMPTS[3].options.map((option) => (
+                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                          <input
+                            type="radio"
+                            name="feedback-post-trip"
+                            checked={feedback.postTrip === option}
+                            onChange={() => setFeedback((prev) => ({ ...prev, postTrip: option }))}
+                            className="mt-1 h-4 w-4 border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
 
-            <section className="mt-5 glass rounded-[32px] p-5 shadow-soft sm:p-6">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-rose-700">Feedback</p>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">給太太的回饋問題</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {FEEDBACK_QUESTIONS.map((question, index) => (
-                  <div key={question} className="rounded-[24px] bg-white p-4 ring-1 ring-slate-200">
-                    <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Q{index + 1}</div>
-                    <p className="mt-2 text-sm leading-7 text-slate-700">{question}</p>
+            <section className="mt-5 space-y-5">
+              <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-rose-700">Feedback</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">給太太的回饋問題</h2>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  玩完 demo 後，幫我選幾個直覺答案就好。按下複製後，直接貼到 LINE 給 Daniel。
+                </p>
+
+                <div className="mt-4 space-y-4">
+                  {FEEDBACK_PROMPTS.map((prompt) => (
+                    <div key={prompt.key} className="rounded-[26px] bg-white p-4 ring-1 ring-slate-200">
+                      <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{prompt.title}</div>
+                      <p className="mt-2 text-sm font-black text-slate-950">{prompt.question}</p>
+                      <div className="mt-3 space-y-2">
+                        {prompt.options.map((option) => (
+                          <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                            <input
+                              type="radio"
+                              name={`feedback-${prompt.key}`}
+                              checked={feedback[prompt.key] === option}
+                              onChange={() => setFeedback((prev) => ({ ...prev, [prompt.key]: option }))}
+                              className="mt-1 h-4 w-4 border-slate-300 text-rose-500 focus:ring-rose-300"
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-[26px] bg-white p-4 ring-1 ring-slate-200">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-black text-slate-950">補充意見</span>
+                    <textarea
+                      value={feedback.note}
+                      onChange={(e) => setFeedback((prev) => ({ ...prev, note: e.target.value }))}
+                      placeholder="有什麼想補充的？例如：哪裡有趣、哪裡麻煩、哪個功能最不像會用。"
+                      className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-rose-100"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={copyFeedback}
+                    className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    複製回饋給 Daniel
+                  </button>
+                  <div className="text-sm leading-6 text-slate-500 sm:self-center">
+                    已幫你整理成 LINE 可直接貼上的文字。
                   </div>
-                ))}
+                </div>
+
+                {copyStatus && (
+                  <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 ring-1 ring-emerald-100">
+                    {copyStatus}
+                  </div>
+                )}
+
+                {showFallback && (
+                  <div className="mt-4 rounded-[26px] border border-amber-200 bg-amber-50/80 p-4">
+                    <p className="text-sm leading-6 text-slate-700">
+                      如果自動複製失敗，請長按下方文字，全選後複製，再貼到 LINE 給 Daniel。
+                    </p>
+                    <textarea
+                      readOnly
+                      value={feedbackSummary}
+                      onFocus={(e) => e.target.select()}
+                      className="mt-3 min-h-[240px] w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none"
+                    />
+                  </div>
+                )}
+
+                {!showFallback && (
+                  <div className="mt-4 rounded-[26px] bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">回饋整理</div>
+                    <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
+                      {feedbackSummary}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </main>
