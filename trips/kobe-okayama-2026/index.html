@@ -45,8 +45,8 @@
     const { useEffect, useMemo, useState } = React;
 
     const STORAGE_KEY = 'kobeOkayama2026Items';
-    const CATEGORY_OPTIONS = ['景點', '美食', '交通', '信用卡', '機票', '住宿', '影片', '文章', '小遊戲靈感', '其他'];
-    const REGION_OPTIONS = ['神戶', '岡山', '姬路', '其他'];
+    const CATEGORY_OPTIONS = ['住宿', '景點', '美食', '交通', '小遊戲靈感', '伴手禮', '文章', '其他'];
+    const REGION_OPTIONS = ['岡山', '倉敷', '神戶', '姬路', '其他'];
     const PRIORITY_OPTIONS = ['必去', '想去', '備案'];
     const STATUS_OPTIONS = ['未確認', '已確認', '已排入行程'];
 
@@ -60,10 +60,51 @@
       status: '未確認'
     };
 
+    const INITIAL_ITEMS = [
+      { title: 'DORMY INN OKAYAMA', category: '住宿', region: '岡山', note: '岡山站周邊住宿候選，大浴場與早餐是重點。', priority: '必去', status: '未確認' },
+      { title: 'HOTEL GRAND COCOE KURASHIKI', category: '住宿', region: '倉敷', note: '倉敷美觀地區周邊住宿候選，步行動線方便。', priority: '想去', status: '未確認' },
+      { title: '神戶三宮皇家公園 CANVAS 酒店', category: '住宿', region: '神戶', note: '三宮周邊住宿備選，適合神戶市區移動。', priority: '必去', status: '未確認' },
+      { title: '岡山後樂園', category: '景點', region: '岡山', note: '經典名園，適合慢慢散步拍照。', priority: '必去', status: '未確認' },
+      { title: '岡山城', category: '景點', region: '岡山', note: '可和後樂園一起安排，順路度高。', priority: '想去', status: '未確認' },
+      { title: '倉敷美觀地區', category: '景點', region: '倉敷', note: '白壁老街與河岸散步，最適合當成主軸行程。', priority: '必去', status: '已確認' },
+      { title: '姬路城', category: '景點', region: '姬路', note: '世界遺產代表點，適合作為一日重點。', priority: '必去', status: '已確認' },
+      { title: '北野異人館街', category: '景點', region: '神戶', note: '神戶經典散步區，適合拍照與慢逛。', priority: '想去', status: '未確認' },
+      { title: '南京町', category: '景點', region: '神戶', note: '可搭配吃東西與逛街，晚上氣氛也不錯。', priority: '必去', status: '未確認' },
+      { title: '神戶港夜景', category: '景點', region: '神戶', note: '保留給晚上壓軸用的夜景點。', priority: '必去', status: '未確認' },
+      { title: '神戶布引香草園', category: '景點', region: '神戶', note: '纜車與山景都很適合當作半日行程。', priority: '想去', status: '未確認' },
+      { title: '神戶牛', category: '美食', region: '神戶', note: '神戶代表性餐點，先列入口袋名單。', priority: '必去', status: '未確認' },
+      { title: '岡山水果聖代', category: '美食', region: '岡山', note: '甜點型目標，適合逛街途中補充體力。', priority: '想去', status: '未確認' },
+      { title: '倉敷咖啡館', category: '美食', region: '倉敷', note: '河岸散步時可安排的咖啡休息點。', priority: '想去', status: '未確認' },
+      { title: '明石燒', category: '美食', region: '其他', note: '章魚燒以外的選擇，放進彈性美食清單。', priority: '備案', status: '未確認' },
+      { title: '南京町小吃', category: '美食', region: '神戶', note: '邊走邊吃的街區型小吃，適合分享。', priority: '必去', status: '未確認' },
+      { title: '桃園到神戶航班', category: '交通', region: '神戶', note: '出發航班候選，先放進旅行前置清單。', priority: '必去', status: '已確認' },
+      { title: '神戶機場到岡山移動', category: '交通', region: '岡山', note: '跨區移動方案先留著比較，日後再定案。', priority: '想去', status: '未確認' },
+      { title: '倉敷到神戶移動', category: '交通', region: '神戶', note: '回到神戶市區的移動備選。', priority: '想去', status: '未確認' },
+      { title: '神戶回桃園航班', category: '交通', region: '神戶', note: '回程航班先列出，方便後續比對時間。', priority: '必去', status: '已確認' },
+      { title: '姬路城黑田官兵衛任務', category: '小遊戲靈感', region: '姬路', note: '可做成城堡探險任務卡，增加互動感。', priority: '想去', status: '未確認' },
+      { title: '岡山桃太郎線索卡', category: '小遊戲靈感', region: '岡山', note: '用小線索引導拍照或找地標。', priority: '想去', status: '未確認' },
+      { title: '倉敷白壁老街觀察任務', category: '小遊戲靈感', region: '倉敷', note: '邊走邊找建築細節的輕量任務。', priority: '想去', status: '未確認' },
+      { title: '神戶港夜景回憶卡', category: '小遊戲靈感', region: '神戶', note: '夜景點可搭配小卡片記錄當天感受。', priority: '想去', status: '未確認' },
+      { title: '岡山白桃相關伴手禮', category: '伴手禮', region: '岡山', note: '甜味系伴手禮首選，先列入清單。', priority: '必去', status: '未確認' },
+      { title: '吉備糰子', category: '伴手禮', region: '岡山', note: '岡山經典名物，方便分享。', priority: '必去', status: '未確認' },
+      { title: '神戶甜點', category: '伴手禮', region: '神戶', note: '回程前可挑選一盒帶回家。', priority: '想去', status: '未確認' },
+      { title: '倉敷帆布小物', category: '伴手禮', region: '倉敷', note: '偏實用的小物備選。', priority: '想去', status: '未確認' },
+      { title: '神戶岡山行前攻略文章', category: '文章', region: '其他', note: '整理交通、住宿與口袋名單的閱讀入口。', priority: '備案', status: '未確認' },
+      { title: '旅行提醒與待確認清單', category: '其他', region: '其他', note: '放置最後才決定的事項與提醒。', priority: '備案', status: '未確認' }
+    ];
+
     const uid = () => {
       if (window.crypto?.randomUUID) return window.crypto.randomUUID();
       return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     };
+
+    const normalizeText = (value) => String(value ?? '').trim();
+
+    const getItemSignature = (item) => [
+      normalizeText(item?.title).toLowerCase(),
+      normalizeText(item?.category),
+      normalizeText(item?.region)
+    ].join('::');
 
     const safeJsonParse = (value, fallback) => {
       try {
@@ -76,16 +117,23 @@
 
     const normalizeItem = (item) => ({
       id: item?.id || uid(),
-      title: String(item?.title || '').trim(),
+      title: normalizeText(item?.title),
       category: CATEGORY_OPTIONS.includes(item?.category) ? item.category : DEFAULT_FORM.category,
       region: REGION_OPTIONS.includes(item?.region) ? item.region : DEFAULT_FORM.region,
-      link: String(item?.link || '').trim(),
-      note: String(item?.note || '').trim(),
+      link: normalizeText(item?.link),
+      note: normalizeText(item?.note),
       priority: PRIORITY_OPTIONS.includes(item?.priority) ? item.priority : DEFAULT_FORM.priority,
       status: STATUS_OPTIONS.includes(item?.status) ? item.status : DEFAULT_FORM.status,
       createdAt: item?.createdAt || new Date().toISOString(),
       updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
     });
+
+    const seedItems = INITIAL_ITEMS.map((item, index) => normalizeItem({
+      ...item,
+      id: `seed-${String(index + 1).padStart(2, '0')}`,
+      createdAt: `2026-07-04T0${String(index % 9).padStart(1, '0')}:00:00.000Z`,
+      updatedAt: `2026-07-04T0${String(index % 9).padStart(1, '0')}:00:00.000Z`
+    }));
 
     const itemStore = {
       load() {
@@ -114,6 +162,28 @@
         const items = this.load().filter((item) => item.id !== id);
         this.save(items);
         return items;
+      },
+      importInitial({ replace = false } = {}) {
+        if (replace) {
+          this.save(seedItems);
+          return { added: seedItems.length, items: seedItems };
+        }
+
+        const existing = this.load();
+        const signatures = new Set(existing.map(getItemSignature));
+        const merged = [...existing];
+        let added = 0;
+
+        seedItems.forEach((item) => {
+          const signature = getItemSignature(item);
+          if (signatures.has(signature)) return;
+          signatures.add(signature);
+          merged.push(item);
+          added += 1;
+        });
+
+        this.save(merged);
+        return { added, items: merged };
       }
     };
 
@@ -200,6 +270,34 @@
       const resetForm = () => {
         setForm(DEFAULT_FORM);
         setEditingId(null);
+      };
+
+      const handleFormKeyDown = (event) => {
+        if (event.key !== 'Enter') return;
+        const target = event.target;
+        if (target?.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+      };
+
+      const handleLoadInitialData = ({ replace = false } = {}) => {
+        const hasExistingItems = itemStore.load().length > 0;
+        if (hasExistingItems) {
+          const messageText = replace
+            ? '這會以初始資料重置目前清單，確定要繼續嗎？'
+            : '這會補入缺少的初始資料，且不會覆蓋現有資料，確定要繼續嗎？';
+          const ok = window.confirm(messageText);
+          if (!ok) return;
+        }
+
+        const result = itemStore.importInitial({ replace });
+        setItems(itemStore.load());
+
+        if (replace) {
+          setMessage(`已重置為初始資料，共 ${result.items.length} 筆。`);
+          return;
+        }
+
+        setMessage(result.added > 0 ? `已補入 ${result.added} 筆初始資料。` : '初始資料都已存在，沒有新增重複項目。');
       };
 
       const handleSubmit = (event) => {
@@ -305,8 +403,11 @@
                 <div className="space-y-2">
                   <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">資料收集小工具</h1>
                   <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-                    出發前先把景點、美食、交通、信用卡、機票、住宿、影片、文章與靈感集中整理，手機上也能快速新增與查看。
+                    出發前先把住宿、景點、美食、交通、伴手禮、文章與靈感集中整理，手機上也能快速新增與查看。
                   </p>
+                  <div className="inline-flex rounded-full bg-amber-100 px-4 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-200">
+                    這個工具不是正式行程排序 App，而是我們的旅行靈感、任務卡與回憶小手冊。正式交通與每日行程仍以去趣 App / Excel 為準。
+                  </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white">
@@ -320,6 +421,30 @@
                   <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
                     <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">最近新增</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">{stats.recent[0]?.title || '尚無資料'}</div>
+                  </div>
+                  <div className="rounded-2xl bg-emerald-50 px-4 py-3 shadow-sm ring-1 ring-emerald-100">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">
+                      {items.length > 0 ? '初始資料補入' : '開始使用'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleLoadInitialData({ replace: false })}
+                      className="mt-1 text-left text-sm font-black text-emerald-900 underline decoration-emerald-300 underline-offset-4"
+                    >
+                      {items.length > 0 ? '補入初始資料' : '載入初始資料'}
+                    </button>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {items.length > 0 ? '只會合併缺少項目，不會覆蓋現有資料。' : '先載入 30 筆內建範例，方便直接分享框架。'}
+                    </p>
+                    {items.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleLoadInitialData({ replace: true })}
+                        className="mt-2 text-xs font-bold text-slate-500 underline decoration-slate-300 underline-offset-4"
+                      >
+                        重置為初始資料
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -509,12 +634,13 @@
                     </div>
                   )}
 
-                  <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+                  <form className="mt-5 space-y-4" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
                     <Field label="標題" hint="必填">
                       <Input
                         required
                         value={form.title}
                         placeholder="例如：神戶牛晚餐候選 / 姬路城周邊景點"
+                        enterKeyHint="next"
                         onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                       />
                     </Field>
@@ -535,6 +661,11 @@
                     <Field label="連結" hint="可留空">
                       <Input
                         type="url"
+                        inputMode="url"
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        enterKeyHint="next"
                         value={form.link}
                         placeholder="https://..."
                         onChange={(e) => setForm((prev) => ({ ...prev, link: e.target.value }))}
@@ -544,6 +675,7 @@
                     <Field label="備註" hint="可留空">
                       <Textarea
                         value={form.note}
+                        enterKeyHint="newline"
                         placeholder="補充原因、地址、營業時間、注意事項、討論紀錄..."
                         onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
                       />
@@ -587,6 +719,7 @@
                     <li>2. 資料會存在 `localStorage`，重新整理後仍保留。</li>
                     <li>3. 你之後若要接 Firebase，可以直接沿用這個 `itemStore` 封裝。</li>
                     <li>4. 點「編輯」可以把資料帶回表單，刪除前會先跳出確認視窗。</li>
+                    <li>5. 「載入初始資料」只會合併缺少項目，不會自動覆蓋既有內容。</li>
                   </ul>
                 </div>
               </section>
