@@ -228,13 +228,26 @@
       已排入行程: 'bg-emerald-100 text-emerald-800'
     };
 
+    const QUICK_FILTER_OPTIONS = [
+      { label: '全部', value: '全部' },
+      { label: '必去', value: '必去' },
+      { label: '已確認', value: '已確認' },
+      { label: '已排入行程', value: '已排入行程' },
+      { label: '待確認', value: '待確認' }
+    ];
+
     function App() {
       const [items, setItems] = useState([]);
       const [form, setForm] = useState(DEFAULT_FORM);
       const [editingId, setEditingId] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [viewMode, setViewMode] = useState('category');
+      const [quickFilter, setQuickFilter] = useState('全部');
       const [filterCategory, setFilterCategory] = useState('全部');
       const [filterRegion, setFilterRegion] = useState('全部');
       const [filterPriority, setFilterPriority] = useState('全部');
+      const [filterStatus, setFilterStatus] = useState('全部');
+      const [expandedCategories, setExpandedCategories] = useState({});
       const [message, setMessage] = useState('');
 
       useEffect(() => {
@@ -248,12 +261,33 @@
       }, [message]);
 
       const filteredItems = useMemo(() => {
+        const normalizedSearch = normalizeText(searchQuery).toLowerCase();
         return items
           .filter((item) => filterCategory === '全部' || item.category === filterCategory)
           .filter((item) => filterRegion === '全部' || item.region === filterRegion)
           .filter((item) => filterPriority === '全部' || item.priority === filterPriority)
+          .filter((item) => filterStatus === '全部' || item.status === filterStatus)
+          .filter((item) => {
+            if (quickFilter === '全部') return true;
+            if (quickFilter === '必去') return item.priority === '必去';
+            if (quickFilter === '已確認') return item.status === '已確認';
+            if (quickFilter === '已排入行程') return item.status === '已排入行程';
+            if (quickFilter === '待確認') return item.status === '未確認';
+            return true;
+          })
+          .filter((item) => {
+            if (!normalizedSearch) return true;
+            return [
+              item.title,
+              item.note,
+              item.category,
+              item.region,
+              item.priority,
+              item.status
+            ].some((value) => normalizeText(value).toLowerCase().includes(normalizedSearch));
+          })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      }, [items, filterCategory, filterRegion, filterPriority]);
+      }, [items, searchQuery, quickFilter, filterCategory, filterRegion, filterPriority, filterStatus]);
 
       const stats = useMemo(() => {
         const countsByCategory = CATEGORY_OPTIONS.reduce((acc, category) => {
@@ -266,6 +300,46 @@
           recent: [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3)
         };
       }, [items]);
+
+      const filteredCountsByCategory = useMemo(() => {
+        return CATEGORY_OPTIONS.reduce((acc, category) => {
+          acc[category] = filteredItems.filter((item) => item.category === category).length;
+          return acc;
+        }, {});
+      }, [filteredItems]);
+
+      const groupedItems = useMemo(() => {
+        return CATEGORY_OPTIONS
+          .map((category) => ({
+            category,
+            items: filteredItems.filter((item) => item.category === category)
+          }))
+          .filter((group) => group.items.length > 0);
+      }, [filteredItems]);
+
+      const visibleCategoryCount = groupedItems.length;
+      const hasActiveSearch = normalizeText(searchQuery).length > 0;
+      const hasNarrowingFilters =
+        hasActiveSearch ||
+        quickFilter !== '全部' ||
+        filterCategory !== '全部' ||
+        filterRegion !== '全部' ||
+        filterPriority !== '全部' ||
+        filterStatus !== '全部';
+      const defaultOpenCategory = useMemo(() => {
+        if (groupedItems.length === 0) return null;
+        const priorityFirst = groupedItems.find((group) => group.items.some((item) => item.priority === '必去'));
+        return (priorityFirst || groupedItems[0])?.category || null;
+      }, [groupedItems]);
+      const shouldCompactCollapse = filteredItems.length > 20 && viewMode === 'category' && !hasNarrowingFilters;
+      const isCategoryExpanded = (category) => {
+        if (hasNarrowingFilters) return true;
+        if (Object.prototype.hasOwnProperty.call(expandedCategories, category)) {
+          return expandedCategories[category];
+        }
+        if (!shouldCompactCollapse) return true;
+        return category === defaultOpenCategory;
+      };
 
       const resetForm = () => {
         setForm(DEFAULT_FORM);
@@ -298,6 +372,13 @@
         }
 
         setMessage(result.added > 0 ? `已補入 ${result.added} 筆初始資料。` : '初始資料都已存在，沒有新增重複項目。');
+      };
+
+      const handleToggleCategory = (category) => {
+        setExpandedCategories((prev) => ({
+          ...prev,
+          [category]: !isCategoryExpanded(category)
+        }));
       };
 
       const handleSubmit = (event) => {
@@ -355,10 +436,97 @@
       };
 
       const clearFilters = () => {
+        setSearchQuery('');
+        setQuickFilter('全部');
         setFilterCategory('全部');
         setFilterRegion('全部');
         setFilterPriority('全部');
+        setFilterStatus('全部');
+        setViewMode('category');
       };
+
+      const visibleItemsTitle = viewMode === 'category' ? '分類檢視' : '清單檢視';
+      const noteExcerptStyle = {
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden'
+      };
+
+      const renderItemCard = (item) => (
+        <article key={item.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-black leading-tight text-slate-950">{item.title}</h3>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${categoryColors[item.category] || 'bg-slate-100 text-slate-700'}`}>{item.category}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${statusColors[item.status] || 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">地區：{item.region}</span>
+                  <span className={`rounded-full px-2.5 py-1 ${priorityColors[item.priority] || 'bg-slate-200 text-slate-700'}`}>優先度：{item.priority}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => startEdit(item)}
+                className="shrink-0 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
+              >
+                編輯
+              </button>
+            </div>
+
+            <p className="text-sm leading-6 text-slate-600" style={noteExcerptStyle}>
+              {formatShort(item.note)}
+            </p>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-slate-400">更新：{formatDateTime(item.updatedAt)}</span>
+              <details className="group">
+                <summary className="cursor-pointer list-none text-xs font-bold text-slate-700 underline decoration-slate-300 underline-offset-4">
+                  更多
+                </summary>
+                <div className="mt-3 space-y-3 rounded-2xl bg-slate-50 p-4">
+                  <div className="space-y-1">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">完整備註</div>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.note || '尚無備註'}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">連結</div>
+                    {item.link ? (
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-bold text-sky-700 underline decoration-sky-200 underline-offset-4"
+                      >
+                        開啟連結
+                      </a>
+                    ) : (
+                      <span className="text-sm text-slate-400">未提供連結</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+                    <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-slate-200">建立：{formatDateTime(item.createdAt)}</span>
+                    <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-slate-200">更新：{formatDateTime(item.updatedAt)}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item)}
+                    className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    刪除
+                  </button>
+                </div>
+              </details>
+            </div>
+          </div>
+        </article>
+      );
 
       const Field = ({ label, children, hint }) => (
         <label className="block space-y-2">
@@ -531,15 +699,51 @@
                 <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <h2 className="text-xl font-black text-slate-950">資料列表</h2>
-                      <p className="mt-1 text-sm text-slate-500">依建立時間由新到舊排序，顯示卡片式內容。</p>
+                      <h2 className="text-xl font-black text-slate-950">{visibleItemsTitle}</h2>
+                      <p className="mt-1 text-sm text-slate-500">先搜尋再篩選，手機上預設以分類方式瀏覽。</p>
                     </div>
                     <div className="text-sm font-semibold text-slate-500">
-                      目前顯示 {filteredItems.length} / {items.length} 筆
+                      目前顯示 {filteredItems.length} / {items.length} 筆，{visibleCategoryCount} 個分類
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_auto]">
+                    <div className="rounded-2xl bg-white p-2 ring-1 ring-slate-200">
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="搜尋景點、美食、備註..."
+                        inputMode="search"
+                        enterKeyHint="search"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode((prev) => (prev === 'category' ? 'list' : 'category'))}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                      切換為{viewMode === 'category' ? '清單檢視' : '分類檢視'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {QUICK_FILTER_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setQuickFilter(option.value)}
+                        className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                          quickFilter === option.value
+                            ? 'bg-slate-950 text-white'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <Select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
                       <option value="全部">全部分類</option>
                       {CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
@@ -552,60 +756,60 @@
                       <option value="全部">全部優先度</option>
                       {PRIORITY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </Select>
+                    <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                      <option value="全部">全部狀態</option>
+                      {STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </Select>
                   </div>
 
-                  <div className="mt-5 space-y-4">
+                  <div className="mt-5">
                     {filteredItems.length === 0 ? (
                       <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-                        目前沒有符合條件的資料。試著調整篩選，或先新增一筆。
+                        目前沒有符合條件的資料。試著調整搜尋或篩選條件，或先新增一筆。
                       </div>
-                    ) : filteredItems.map((item) => (
-                      <article key={item.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-lg font-black text-slate-950">{item.title}</h3>
-                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${categoryColors[item.category] || 'bg-slate-100 text-slate-700'}`}>{item.category}</span>
-                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${statusColors[item.status] || 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
-                              <span className="rounded-full bg-slate-100 px-2.5 py-1">地區：{item.region}</span>
-                              <span className={`rounded-full px-2.5 py-1 ${priorityColors[item.priority] || 'bg-slate-200 text-slate-700'}`}>優先度：{item.priority}</span>
-                              <span className="rounded-full bg-slate-100 px-2.5 py-1">建立：{formatDateTime(item.createdAt)}</span>
-                            </div>
-                            <p className="text-sm leading-6 text-slate-600">{formatShort(item.note)}</p>
-                            {item.link ? (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 text-sm font-bold text-sky-700 underline decoration-sky-200 underline-offset-4"
+                    ) : viewMode === 'category' ? (
+                      <div className="space-y-3">
+                        {groupedItems.map((group) => {
+                          const expanded = isCategoryExpanded(group.category);
+                          return (
+                            <section key={group.category} className="rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCategory(group.category)}
+                                className="flex w-full items-center justify-between gap-3 rounded-[20px] bg-slate-50 px-4 py-4 text-left transition hover:bg-slate-100"
                               >
-                                開啟連結
-                              </a>
-                            ) : (
-                              <span className="text-sm text-slate-400">未提供連結</span>
-                            )}
-                          </div>
-                          <div className="flex shrink-0 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(item)}
-                              className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
-                            >
-                              編輯
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(item)}
-                              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
-                            >
-                              刪除
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`rounded-full px-3 py-1 text-xs font-black ${categoryColors[group.category] || 'bg-slate-100 text-slate-700'}`}>
+                                      {group.category}
+                                    </span>
+                                    <span className="text-sm font-bold text-slate-700">
+                                      {filteredCountsByCategory[group.category]} 筆
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {hasActiveSearch ? '符合搜尋與篩選條件的結果' : '點一下收合或展開這個分類'}
+                                  </p>
+                                </div>
+                                <span className="text-sm font-black text-slate-500">
+                                  {expanded ? '收合' : '展開'}
+                                </span>
+                              </button>
+
+                              {expanded && (
+                                <div className="mt-3 space-y-3 px-1 pb-1">
+                                  {group.items.map((item) => renderItemCard(item))}
+                                </div>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredItems.map((item) => renderItemCard(item))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
