@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>2026 神戶岡山之旅｜旅途策展小手冊 Concept Demo</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          boxShadow: {
+            soft: '0 18px 50px rgba(15, 23, 42, 0.14)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    html, body { height: 100%; }
+    body {
+      font-family: "Noto Sans TC", sans-serif;
+      color: #0f172a;
+      background:
+        radial-gradient(circle at top left, rgba(251, 191, 36, 0.22), transparent 28%),
+        radial-gradient(circle at 85% 10%, rgba(59, 130, 246, 0.16), transparent 22%),
+        radial-gradient(circle at 30% 80%, rgba(244, 114, 182, 0.10), transparent 24%),
+        linear-gradient(180deg, #fffdf8 0%, #f8fafc 100%);
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.84);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .soft-grid {
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useMemo, useState } = React;
+
+    const TODAY_TASKS = [
+      '找一面你最喜歡的白壁',
+      '拍一張「今天的安靜感」',
+      '幫今天取一個像電影片名的名字'
+    ];
+
+    const INSPIRATION_CARDS = [
+      '今天請找一個不像觀光景點、但你想記住的小東西',
+      '今天請選一個代表色',
+      '今天請幫旅程拍一張「開場畫面」',
+      '今天請找一個適合變成明信片的角落',
+      '今天請記住一句你們兩個才懂的話',
+      '今天請找一個最像夏天的聲音',
+      '今天請選一個最想帶回家的生活細節',
+      '今天請拍一張「如果這趟旅程是動畫」的畫面'
+    ];
+
+    const STORY_CARDS = [
+      {
+        title: '姬路城｜白鷺城攻防觀察',
+        tone: '把它當成一座會呼吸的白色城堡，不急著走完，只看它怎麼守住時間。',
+        tasks: ['找一個最像「防守核心」的位置', '拍一張城牆與天空的對比', '猜猜哪個角度最像白鷺展翅']
+      },
+      {
+        title: '岡山｜桃太郎線索卡',
+        tone: '不要先找答案，先找線索。岡山很適合做成一場輕鬆的尋寶。',
+        tasks: ['找一個桃太郎感最強的標記', '記下一個今天遇到的「小角色」', '拍一張像冒險開始的路口']
+      },
+      {
+        title: '倉敷｜白壁老街觀察任務',
+        tone: '這裡適合放慢腳步，把「逛街」換成「觀察生活的細節」。',
+        tasks: ['找一面最溫柔的白牆', '記下今天最安靜的聲音', '拍一張能做成明信片構圖的角落']
+      },
+      {
+        title: '神戶港｜夜景回憶卡',
+        tone: '把夜景當成一天的收尾，不只是看燈，而是把那一刻收進記憶裡。',
+        tasks: ['選一個最像電影海報的角度', '留下一句今晚的心情', '拍一張「如果是動畫分鏡」的夜色']
+      }
+    ];
+
+    const FEEDBACK_QUESTIONS = [
+      '這種每天 3 分鐘的小任務，你會覺得有趣還是麻煩？',
+      '你比較喜歡任務卡、抽卡、故事卡，還是旅後明信片？',
+      '旅行中你願意留一句話嗎？',
+      '你覺得這跟 Notion / 去趣有沒有重疊？',
+      '如果只能保留一個功能，你會選哪一個？'
+    ];
+
+    const POST_TRIP_PREVIEWS = [
+      {
+        title: 'AI 插畫明信片',
+        desc: '把每天的一句話、幾張照片與任務勾選，整理成一組像插畫收藏卡的旅行印象。'
+      },
+      {
+        title: '短動畫分鏡',
+        desc: '將白天的路、傍晚的光、夜晚的聲音，組成 3 到 5 格的動畫感分鏡。'
+      },
+      {
+        title: '互動回憶頁',
+        desc: '可以回看任務完成狀態、抽過的卡、以及旅程中的小句子，像一本數位小冊。'
+      }
+    ];
+
+    const cx = (...classes) => classes.filter(Boolean).join(' ');
+
+    function App() {
+      const [taskChecks, setTaskChecks] = useState([false, false, false]);
+      const [currentCardIndex, setCurrentCardIndex] = useState(0);
+      const [storyOpen, setStoryOpen] = useState('姬路城｜白鷺城攻防觀察');
+
+      const currentCard = useMemo(() => INSPIRATION_CARDS[currentCardIndex], [currentCardIndex]);
+
+      const toggleTask = (index) => {
+        setTaskChecks((prev) => prev.map((checked, idx) => idx === index ? !checked : checked));
+      };
+
+      const drawCard = () => {
+        let nextIndex = currentCardIndex;
+        if (INSPIRATION_CARDS.length > 1) {
+          while (nextIndex === currentCardIndex) {
+            nextIndex = Math.floor(Math.random() * INSPIRATION_CARDS.length);
+          }
+        }
+        setCurrentCardIndex(nextIndex);
+      };
+
+      return (
+        <div className="min-h-screen">
+          <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+            <section className="glass relative overflow-hidden rounded-[32px] px-5 py-8 shadow-soft sm:px-8 sm:py-10">
+              <div className="absolute inset-0 soft-grid opacity-40"></div>
+              <div className="relative space-y-5">
+                <div className="inline-flex rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white">
+                  旅途策展小手冊 Concept Demo
+                </div>
+                <div className="max-w-3xl space-y-3">
+                  <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                    2026 神戶岡山之旅｜旅途策展小手冊
+                  </h1>
+                  <p className="text-sm leading-7 text-slate-600 sm:text-base">
+                    這不是行程排序工具，也不是 Notion 資料庫。
+                    它是每天打開 3 分鐘，幫這趟旅行加一點故事感的小手冊。
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    ['每天 3 分鐘', '用一點點任務和一句話，慢慢把旅行收進記憶裡。'],
+                    ['不取代工具', '正式行程與交通仍交給去趣 App / Excel。'],
+                    ['旅後可延伸', '可整理成 AI 插畫、明信片與動畫分鏡。']
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-[24px] bg-white/90 p-4 ring-1 ring-slate-200">
+                      <div className="text-sm font-black text-slate-950">{title}</div>
+                      <div className="mt-1 text-sm leading-6 text-slate-600">{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-5">
+                <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-700">Today</p>
+                      <h2 className="mt-1 text-2xl font-black text-slate-950">今日任務卡 Demo</h2>
+                    </div>
+                    <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
+                      Day 3
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-soft">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+                      <span className="rounded-full bg-white/10 px-3 py-1">Day 3</span>
+                      <span className="rounded-full bg-white/10 px-3 py-1">倉敷</span>
+                      <span className="rounded-full bg-white/10 px-3 py-1">白壁慢走任務</span>
+                    </div>
+                    <h3 className="mt-4 text-2xl font-black tracking-tight">今日主題：找一個時間變慢的角落</h3>
+                    <p className="mt-2 text-sm leading-7 text-slate-300">
+                      這一張卡只要在旅途中快速看 10 秒，提醒我們今天不要急著趕路。
+                    </p>
+
+                    <div className="mt-5 space-y-3">
+                      {TODAY_TASKS.map((task, index) => (
+                        <label key={task} className="flex items-start gap-3 rounded-2xl bg-white/8 px-4 py-3 ring-1 ring-white/10">
+                          <input
+                            type="checkbox"
+                            checked={taskChecks[index]}
+                            onChange={() => toggleTask(index)}
+                            className="mt-1 h-4 w-4 rounded border-white/40 bg-transparent text-amber-400 focus:ring-amber-300"
+                          />
+                          <span className={cx('text-sm leading-6', taskChecks[index] && 'text-slate-400 line-through')}>
+                            {task}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.24em] text-sky-700">Card Draw</p>
+                      <h2 className="mt-1 text-2xl font-black text-slate-950">抽一張今日靈感卡</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={drawCard}
+                      className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                    >
+                      抽一張今日靈感卡
+                    </button>
+                  </div>
+
+                  <div className="mt-5 rounded-[28px] border border-dashed border-amber-200 bg-amber-50/80 p-5">
+                    <div className="text-xs font-black uppercase tracking-[0.24em] text-amber-700">今日靈感</div>
+                    <p className="mt-3 text-xl font-black leading-8 text-slate-950 transition-all duration-300">
+                      {currentCard}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      每次按下按鈕，卡片內容會切換。這個 demo 只想讓人感覺到「旅途中有一個可以被輕鬆打開的小驚喜」。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-fuchsia-700">Story Cards</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">景點故事卡</h2>
+                  <div className="mt-5 space-y-3">
+                    {STORY_CARDS.map((card) => {
+                      const open = storyOpen === card.title;
+                      return (
+                        <article key={card.title} className="rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setStoryOpen(open ? '' : card.title)}
+                            className="flex w-full items-start justify-between gap-3 text-left"
+                          >
+                            <div className="min-w-0">
+                              <h3 className="text-lg font-black leading-tight text-slate-950">{card.title}</h3>
+                              <p className="mt-2 text-sm leading-6 text-slate-600">{card.tone}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                              {open ? '收合' : '展開'}
+                            </span>
+                          </button>
+
+                          {open && (
+                            <div className="mt-4 space-y-2">
+                              {card.tasks.map((task) => (
+                                <div key={task} className="flex items-start gap-2 rounded-2xl bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                                  <span className="mt-1 h-2 w-2 rounded-full bg-amber-400"></span>
+                                  <span>{task}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="glass rounded-[32px] p-5 shadow-soft sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-700">After Trip</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">旅後 AI 明信片預覽</h2>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                    旅行中只要每天留下一句話、一個任務勾選、幾張手機照片，旅後就能整理成一組屬於我們的 AI 明信片與旅行故事。
+                  </p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    {POST_TRIP_PREVIEWS.map((item) => (
+                      <div key={item.title} className="rounded-[24px] bg-white p-4 ring-1 ring-slate-200">
+                        <div className="h-28 rounded-2xl bg-gradient-to-br from-amber-100 via-white to-sky-100 p-3">
+                          <div className="flex h-full flex-col justify-between">
+                            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Preview</div>
+                            <div>
+                              <div className="text-lg font-black text-slate-950">{item.title}</div>
+                              <div className="mt-1 text-xs leading-5 text-slate-600">
+                                {item.title === 'AI 插畫明信片' ? '插畫感 postcard' : item.title === '短動畫分鏡' ? '3 - 5 格故事' : '可回看收藏頁'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">{item.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-5 glass rounded-[32px] p-5 shadow-soft sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-rose-700">Feedback</p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">給太太的回饋問題</h2>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {FEEDBACK_QUESTIONS.map((question, index) => (
+                  <div key={question} className="rounded-[24px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Q{index + 1}</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-700">{question}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </main>
+
+          <div className="safe-bottom fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 text-xs font-bold text-slate-500">
+              <span>手機優先</span>
+              <span>概念 demo</span>
+              <span>不接資料庫</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
