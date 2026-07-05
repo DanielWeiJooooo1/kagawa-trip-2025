@@ -1,0 +1,14 @@
+{
+  "name": "kagawa-trip-2025",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test:concept": "playwright test tests/concept.spec.js",
+    "test:concept:headed": "playwright test tests/concept.spec.js --headed",
+    "test:concept:ui": "playwright test tests/concept.spec.js --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0"
+  }
+}
