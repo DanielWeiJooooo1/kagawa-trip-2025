@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = fileURLToPath(new URL('.', import.meta.url)).replace(/[\\/]+$/, '');
 process.env.TRAVEL_REPO_ROOT = repoRoot;
 
 export default defineConfig({

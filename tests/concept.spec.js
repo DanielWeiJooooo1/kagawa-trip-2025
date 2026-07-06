@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = process.env.TRAVEL_REPO_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 test('concept demo smoke test', async ({ page }) => {
-  await page.goto('/trips/kobe-okayama-2026/concept.html');
+  await page.goto('/trips/kobe-okayama-2026/concept/');
 
   await expect(page).toHaveTitle(/旅途策展小手冊/);
 
