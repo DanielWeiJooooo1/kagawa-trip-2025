@@ -17,6 +17,7 @@
 
 ## Index
 - `docs/product-direction.md`
+- `docs/travel-prep-cadence.md`
 - `NEXT_STEPS.md`
 - `npm run test:concept`
 - `npm run test:concept:headed`
