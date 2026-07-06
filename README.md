@@ -6,9 +6,14 @@
 ## Topology
 - `index.html`：根目錄主站，保留原本高松網站
 - `trips/kobe-okayama-2026/index.html`：神戶岡山旅程主頁
-- `trips/kobe-okayama-2026/concept.html`：旅途策展 concept demo
+- `trips/kobe-okayama-2026/concept/index.html`：旅途策展 concept demo
 - `tests/concept.spec.js`：Playwright smoke test
 - `playwright.config.js`：本機靜態站驗收設定
+
+## Route Notes
+- 主頁的「查看旅途策展 Demo」連結指向 `./concept/`
+- 若手機曾快取舊版，請優先直接開 `trips/kobe-okayama-2026/concept/`
+- Demo 內保留回饋流程、複製按鈕與 fallback textarea
 
 ## Index
 - `npm run test:concept`
