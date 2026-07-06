@@ -276,24 +276,6 @@
                     </div>
                   </div>
 
-                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
-                    <div className="text-sm font-black text-slate-950">這種每天 3 分鐘的小任務，你覺得？</div>
-                    <div className="mt-3 space-y-2">
-                      {FEEDBACK_PROMPTS[0].options.map((option) => (
-                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-                          <input
-                            type="radio"
-                            name="feedback-task"
-                            checked={feedback.task === option}
-                            onChange={() => setFeedback((prev) => ({ ...prev, task: option }))}
-                            className="mt-1 h-4 w-4 border-slate-300 text-amber-500 focus:ring-amber-300"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-soft">
                     <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
                       <span className="rounded-full bg-white/10 px-3 py-1">Day 3</span>
@@ -317,6 +299,24 @@
                           <span className={cx('text-sm leading-6', taskChecks[index] && 'text-slate-400 line-through')}>
                             {task}
                           </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[28px] bg-white p-4 ring-1 ring-slate-200">
+                    <div className="text-sm font-black text-slate-950">這種每天 3 分鐘的小任務，你覺得？</div>
+                    <div className="mt-3 space-y-2">
+                      {FEEDBACK_PROMPTS[0].options.map((option) => (
+                        <label key={option} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                          <input
+                            type="radio"
+                            name="feedback-task"
+                            checked={feedback.task === option}
+                            onChange={() => setFeedback((prev) => ({ ...prev, task: option }))}
+                            className="mt-1 h-4 w-4 border-slate-300 text-amber-500 focus:ring-amber-300"
+                          />
+                          <span>{option}</span>
                         </label>
                       ))}
                     </div>
