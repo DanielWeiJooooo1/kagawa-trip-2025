@@ -16,6 +16,8 @@
 - Demo 內保留回饋流程、複製按鈕與 fallback textarea
 
 ## Index
+- `docs/product-direction.md`
+- `NEXT_STEPS.md`
 - `npm run test:concept`
 - `npm run test:concept:headed`
 - `npm run test:concept:ui`
