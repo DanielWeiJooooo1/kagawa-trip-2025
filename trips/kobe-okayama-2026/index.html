@@ -49,6 +49,7 @@
     const REGION_OPTIONS = ['岡山', '倉敷', '神戶', '姬路', '其他'];
     const PRIORITY_OPTIONS = ['必去', '想去', '備案'];
     const STATUS_OPTIONS = ['未確認', '已確認', '已排入行程'];
+    const TRIP_DAY_OPTIONS = ['Unscheduled', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'];
 
     const DEFAULT_FORM = {
       title: '',
@@ -57,7 +58,9 @@
       link: '',
       note: '',
       priority: '想去',
-      status: '未確認'
+      status: '未確認',
+      tripDay: 'Unscheduled',
+      tripOrder: 1
     };
 
     const INITIAL_ITEMS = [
@@ -115,6 +118,11 @@
       }
     };
 
+    const normalizeTripOrder = (value) => {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    };
+
     const normalizeItem = (item) => ({
       id: item?.id || uid(),
       title: normalizeText(item?.title),
@@ -124,6 +132,10 @@
       note: normalizeText(item?.note),
       priority: PRIORITY_OPTIONS.includes(item?.priority) ? item.priority : DEFAULT_FORM.priority,
       status: STATUS_OPTIONS.includes(item?.status) ? item.status : DEFAULT_FORM.status,
+      tripDay: TRIP_DAY_OPTIONS.includes(item?.tripDay) ? item.tripDay : DEFAULT_FORM.tripDay,
+      tripOrder: normalizeTripOrder(item?.tripOrder),
+      isCompleted: item?.isCompleted === true,
+      completedAt: item?.isCompleted === true && item?.completedAt ? item.completedAt : null,
       createdAt: item?.createdAt || new Date().toISOString(),
       updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
     });
@@ -163,10 +175,55 @@
         this.save(items);
         return items;
       },
+      toggleCompleted(id) {
+        const now = new Date().toISOString();
+        const items = this.load().map((item) => item.id === id ? normalizeItem({
+          ...item,
+          isCompleted: !item.isCompleted,
+          completedAt: item.isCompleted ? null : now,
+          updatedAt: now
+        }) : item);
+        this.save(items);
+        return items;
+      },
+      moveInDay(id, direction) {
+        const items = this.load();
+        const target = items.find((item) => item.id === id);
+        if (!target || target.tripDay === 'Unscheduled') return items;
+
+        const dayItems = items
+          .filter((item) => item.tripDay === target.tripDay)
+          .sort(compareTripItems);
+        const index = dayItems.findIndex((item) => item.id === id);
+        const swapIndex = direction === 'up' ? index - 1 : index + 1;
+        if (index < 0 || swapIndex < 0 || swapIndex >= dayItems.length) return items;
+
+        [dayItems[index], dayItems[swapIndex]] = [dayItems[swapIndex], dayItems[index]];
+        const orderById = new Map(dayItems.map((item, orderIndex) => [item.id, orderIndex + 1]));
+        const now = new Date().toISOString();
+        const reordered = items.map((item) => orderById.has(item.id)
+          ? normalizeItem({ ...item, tripOrder: orderById.get(item.id), updatedAt: now })
+          : item);
+        this.save(reordered);
+        return reordered;
+      },
       importInitial({ replace = false } = {}) {
         if (replace) {
-          this.save(seedItems);
-          return { added: seedItems.length, items: seedItems };
+          const existingBySignature = new Map(this.load().map((item) => [getItemSignature(item), item]));
+          const resetItems = seedItems.map((seedItem) => {
+            const existing = existingBySignature.get(getItemSignature(seedItem));
+            if (!existing) return seedItem;
+            return normalizeItem({
+              ...seedItem,
+              id: existing.id,
+              tripDay: existing.tripDay,
+              tripOrder: existing.tripOrder,
+              isCompleted: existing.isCompleted,
+              completedAt: existing.completedAt
+            });
+          });
+          this.save(resetItems);
+          return { added: resetItems.length, items: resetItems };
         }
 
         const existing = this.load();
@@ -201,6 +258,34 @@
     const formatShort = (value) => {
       if (!value) return '尚無備註';
       return value.length > 60 ? `${value.slice(0, 60)}…` : value;
+    };
+
+    const compareTripItems = (a, b) => {
+      const byOrder = normalizeTripOrder(a.tripOrder) - normalizeTripOrder(b.tripOrder);
+      if (byOrder !== 0) return byOrder;
+      const byCreatedAt = String(a.createdAt).localeCompare(String(b.createdAt));
+      return byCreatedAt !== 0 ? byCreatedAt : String(a.id).localeCompare(String(b.id));
+    };
+
+    const getSafeExternalUrl = (value) => {
+      try {
+        const url = new URL(normalizeText(value));
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const getMapUrl = (item) => {
+      const safeLink = getSafeExternalUrl(item.link);
+      if (safeLink) {
+        const hostname = new URL(safeLink).hostname.toLowerCase();
+        if (hostname === 'maps.app.goo.gl' || hostname.includes('google.') && safeLink.includes('/maps')) {
+          return safeLink;
+        }
+      }
+      const query = [normalizeText(item.title), normalizeText(item.region), '日本'].filter(Boolean).join(' ');
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
     };
 
     const categoryColors = {
@@ -240,6 +325,8 @@
       const [items, setItems] = useState([]);
       const [form, setForm] = useState(DEFAULT_FORM);
       const [editingId, setEditingId] = useState(null);
+      const [appMode, setAppMode] = useState('collection');
+      const [selectedTripDay, setSelectedTripDay] = useState('Day 1');
       const [searchQuery, setSearchQuery] = useState('');
       const [viewMode, setViewMode] = useState('category');
       const [quickFilter, setQuickFilter] = useState('全部');
@@ -316,6 +403,16 @@
           }))
           .filter((group) => group.items.length > 0);
       }, [filteredItems]);
+
+      const selectedDayItems = useMemo(() => items
+        .filter((item) => item.tripDay === selectedTripDay)
+        .sort(compareTripItems), [items, selectedTripDay]);
+      const completedDayItems = selectedDayItems.filter((item) => item.isCompleted);
+      const nextStop = selectedDayItems.find((item) => !item.isCompleted) || null;
+      const completionPercent = selectedDayItems.length > 0
+        ? Math.round((completedDayItems.length / selectedDayItems.length) * 100)
+        : 0;
+      const unscheduledCount = items.filter((item) => item.tripDay === 'Unscheduled').length;
 
       const visibleCategoryCount = groupedItems.length;
       const hasActiveSearch = normalizeText(searchQuery).length > 0;
@@ -396,7 +493,9 @@
           link: form.link.trim(),
           note: form.note.trim(),
           priority: form.priority,
-          status: form.status
+          status: form.status,
+          tripDay: form.tripDay,
+          tripOrder: normalizeTripOrder(form.tripOrder)
         };
 
         if (editingId) {
@@ -421,7 +520,9 @@
           link: item.link,
           note: item.note,
           priority: item.priority,
-          status: item.status
+          status: item.status,
+          tripDay: item.tripDay,
+          tripOrder: item.tripOrder
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
@@ -433,6 +534,14 @@
         setItems(itemStore.load());
         setMessage('已刪除資料。');
         if (editingId === item.id) resetForm();
+      };
+
+      const handleToggleCompleted = (id) => {
+        setItems(itemStore.toggleCompleted(id));
+      };
+
+      const handleMoveInDay = (id, direction) => {
+        setItems(itemStore.moveInDay(id, direction));
       };
 
       const clearFilters = () => {
@@ -466,6 +575,9 @@
                 <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
                   <span className="rounded-full bg-slate-100 px-2.5 py-1">地區：{item.region}</span>
                   <span className={`rounded-full px-2.5 py-1 ${priorityColors[item.priority] || 'bg-slate-200 text-slate-700'}`}>優先度：{item.priority}</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
+                    {item.tripDay === 'Unscheduled' ? '未排日' : `${item.tripDay} · 第 ${item.tripOrder} 站`}
+                  </span>
                 </div>
               </div>
               <button
@@ -495,11 +607,11 @@
 
                   <div className="space-y-1">
                     <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">連結</div>
-                    {item.link ? (
+                    {getSafeExternalUrl(item.link) ? (
                       <a
-                        href={item.link}
+                        href={getSafeExternalUrl(item.link)}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 text-sm font-bold text-sky-700 underline decoration-sky-200 underline-offset-4"
                       >
                         開啟連結
@@ -626,6 +738,214 @@
               </div>
             </header>
 
+            <nav className="glass mt-4 grid grid-cols-2 gap-2 rounded-[24px] p-2 shadow-soft" aria-label="網站模式">
+              <button
+                type="button"
+                onClick={() => setAppMode('trip')}
+                aria-pressed={appMode === 'trip'}
+                className={`min-h-12 rounded-[18px] px-4 py-3 text-sm font-black transition ${
+                  appMode === 'trip' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-white'
+                }`}
+              >
+                旅行模式
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppMode('collection')}
+                aria-pressed={appMode === 'collection'}
+                className={`min-h-12 rounded-[18px] px-4 py-3 text-sm font-black transition ${
+                  appMode === 'collection' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-white'
+                }`}
+              >
+                收藏與編輯
+              </button>
+            </nav>
+
+            {appMode === 'trip' && (
+              <main className="mt-5 space-y-5" data-testid="trip-mode">
+                <section className="glass overflow-hidden rounded-[28px] shadow-soft">
+                  <div className="bg-slate-950 px-5 py-6 text-white sm:px-7">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">Trip Mode v0.1</p>
+                        <h2 className="mt-2 text-3xl font-black">{selectedTripDay}</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">今天照順序走，完成一站就勾一站。</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-2xl bg-white/10 px-3 py-2">
+                          <div className="text-xl font-black">{selectedDayItems.length}</div>
+                          <div className="text-[11px] text-slate-300">今日站點</div>
+                        </div>
+                        <div className="rounded-2xl bg-white/10 px-3 py-2">
+                          <div className="text-xl font-black">{completedDayItems.length}</div>
+                          <div className="text-[11px] text-slate-300">已完成</div>
+                        </div>
+                        <div className="rounded-2xl bg-white/10 px-3 py-2">
+                          <div className="text-xl font-black">{selectedDayItems.length - completedDayItems.length}</div>
+                          <div className="text-[11px] text-slate-300">未完成</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5" aria-label={`完成進度 ${completionPercent}%`}>
+                      <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-300">
+                        <span>今日進度 {completedDayItems.length} / {selectedDayItems.length}</span>
+                        <span>{completionPercent}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                        <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${completionPercent}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 sm:p-6">
+                    <div className="overflow-x-auto pb-2">
+                      <div className="flex min-w-max gap-2" aria-label="選擇旅程日">
+                        {TRIP_DAY_OPTIONS.filter((day) => day !== 'Unscheduled').map((day) => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => setSelectedTripDay(day)}
+                            aria-pressed={selectedTripDay === day}
+                            className={`min-h-11 rounded-full px-4 py-2 text-sm font-black transition ${
+                              selectedTripDay === day
+                                ? 'bg-amber-400 text-slate-950'
+                                : 'border border-slate-200 bg-white text-slate-600'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`mt-3 rounded-[24px] border p-4 ${
+                      nextStop ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'
+                    }`} data-testid="next-stop">
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">下一站</p>
+                      <p className="mt-2 break-words text-xl font-black text-slate-950">
+                        {nextStop ? nextStop.title : selectedDayItems.length > 0 ? '今天的站點都完成了' : '這一天還沒有安排站點'}
+                      </p>
+                      {nextStop && <p className="mt-1 text-sm text-slate-600">第 {selectedDayItems.indexOf(nextStop) + 1} 站 · {nextStop.region} · {nextStop.category}</p>}
+                    </div>
+                  </div>
+                </section>
+
+                {unscheduledCount > 0 && (
+                  <section className="rounded-[24px] border border-indigo-100 bg-indigo-50 px-5 py-4 text-indigo-950">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-bold">還有 {unscheduledCount} 筆資料尚未安排旅程日。</p>
+                      <button
+                        type="button"
+                        onClick={() => setAppMode('collection')}
+                        className="min-h-11 rounded-2xl bg-white px-4 py-2 text-sm font-black shadow-sm"
+                      >
+                        前往收藏與編輯
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                <section className="space-y-3" aria-label={`${selectedTripDay} 站點`}>
+                  {selectedDayItems.length === 0 ? (
+                    <div className="glass rounded-[28px] px-6 py-12 text-center shadow-soft">
+                      <p className="text-lg font-black text-slate-900">這一天還是空白的</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">到「收藏與編輯」替項目選擇 {selectedTripDay}，就會依順序出現在這裡。</p>
+                      <button
+                        type="button"
+                        onClick={() => setAppMode('collection')}
+                        className="mt-5 min-h-12 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white"
+                      >
+                        安排今日站點
+                      </button>
+                    </div>
+                  ) : selectedDayItems.map((item, index) => {
+                    const safeOriginalUrl = getSafeExternalUrl(item.link);
+                    return (
+                      <article
+                        key={item.id}
+                        data-testid="trip-stop"
+                        className={`rounded-[28px] border p-4 shadow-sm transition sm:p-5 ${
+                          item.isCompleted
+                            ? 'border-emerald-200 bg-emerald-50/90 opacity-75'
+                            : index === selectedDayItems.findIndex((stop) => !stop.isCompleted)
+                              ? 'border-amber-300 bg-white ring-4 ring-amber-100'
+                              : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-base font-black ${
+                            item.isCompleted ? 'bg-emerald-600 text-white' : 'bg-slate-950 text-white'
+                          }`}>
+                            {item.isCompleted ? '✓' : index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className={`break-words text-lg font-black leading-tight ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-950'}`}>
+                                {item.title}
+                              </h3>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${categoryColors[item.category] || 'bg-slate-100 text-slate-700'}`}>{item.category}</span>
+                            </div>
+                            <p className="mt-2 text-xs font-bold text-slate-500">第 {index + 1} 站 · {item.region}</p>
+                            <p className="mt-2 break-words text-sm leading-6 text-slate-600" style={noteExcerptStyle}>{formatShort(item.note)}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                          <a
+                            href={getMapUrl(item)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white"
+                          >
+                            在地圖中開啟
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCompleted(item.id)}
+                            className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black ${
+                              item.isCompleted ? 'border border-slate-200 bg-white text-slate-700' : 'bg-emerald-600 text-white'
+                            }`}
+                          >
+                            {item.isCompleted ? '取消完成' : '標記完成'}
+                          </button>
+                          {safeOriginalUrl && (
+                            <a
+                              href={safeOriginalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700"
+                            >
+                              原始連結
+                            </a>
+                          )}
+                          <div className="col-span-2 flex gap-2 sm:ml-auto">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleMoveInDay(item.id, 'up')}
+                              className="min-h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 sm:flex-none"
+                            >
+                              上移
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === selectedDayItems.length - 1}
+                              onClick={() => handleMoveInDay(item.id, 'down')}
+                              className="min-h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 sm:flex-none"
+                            >
+                              下移
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </section>
+              </main>
+            )}
+
+            {appMode === 'collection' && (
             <main className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
               <section className="space-y-5">
                 <div className="glass rounded-[28px] p-5 shadow-soft sm:p-6">
@@ -906,6 +1226,29 @@
                       </Field>
                     </div>
 
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="旅程日" hint="可稍後安排">
+                        <Select
+                          value={form.tripDay}
+                          onChange={(e) => setForm((prev) => ({ ...prev, tripDay: e.target.value }))}
+                        >
+                          {TRIP_DAY_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt === 'Unscheduled' ? '尚未安排' : opt}</option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="當日順序" hint="正整數">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          step="1"
+                          value={form.tripOrder}
+                          onChange={(e) => setForm((prev) => ({ ...prev, tripOrder: e.target.value }))}
+                        />
+                      </Field>
+                    </div>
+
                     <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                       <button
                         type="submit"
@@ -932,10 +1275,12 @@
                     <li>3. 你之後若要接 Firebase，可以直接沿用這個 `itemStore` 封裝。</li>
                     <li>4. 點「編輯」可以把資料帶回表單，刪除前會先跳出確認視窗。</li>
                     <li>5. 「載入初始資料」只會合併缺少項目，不會自動覆蓋既有內容。</li>
+                    <li>6. 替資料設定旅程日與順序後，可在「旅行模式」標記完成、查看下一站與開啟地圖。</li>
                   </ul>
                 </div>
               </section>
             </main>
+            )}
           </div>
 
           <div className="safe-bottom fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
