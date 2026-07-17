@@ -87,7 +87,9 @@ const syntheticItems = [
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(({ key, items }) => {
-    localStorage.setItem(key, JSON.stringify(items));
+    if (localStorage.getItem(key) === null) {
+      localStorage.setItem(key, JSON.stringify(items));
+    }
   }, { key: STORAGE_KEY, items: syntheticItems });
 });
 
